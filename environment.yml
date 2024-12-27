@@ -1,0 +1,23 @@
+name: InforMARLJAX
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # sweet spot for broad compatibility and stability while still getting the latest features
+  - python=3.10
+  # formatting
+  - black
+  - ruff
+  - pip
+  - pip:
+      # Installing some jax packages from pip and others from conda causes issues. So everything is installed from pip.
+      # JAX
+      - jax
+      # Types
+      - beartype
+      - jaxtyping
+      # JAX Neural networks
+      - flax
+      - jraph
+      # MARL
+      - jaxmarl
