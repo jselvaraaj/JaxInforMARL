@@ -19,5 +19,7 @@ dependencies:
       # JAX Neural networks
       - flax
       - jraph
+      # RL
+      - gymnax
       # MARL
       - jaxmarl
