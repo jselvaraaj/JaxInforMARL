@@ -6,10 +6,8 @@ import jax
 
 from .schema import (
     PRNGKey,
-    MultiAgentObservations,
     MultiAgentState,
     AgentLabel,
-    MultiAgentEnvOutput,
     MultiAgentActions,
     EntityLabel,
 )
@@ -76,13 +74,11 @@ class MultiAgentEnv(ABC):
         )
 
     @abstractmethod
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservations, MultiAgentState]:
+    def reset(self, key: PRNGKey):
         """Performs resetting of the environment."""
 
     @abstractmethod
-    def _step(
-        self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentActions
-    ) -> MultiAgentEnvOutput:
+    def _step(self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentActions):
         """Environment-specific step transition."""
 
     @final
@@ -92,7 +88,7 @@ class MultiAgentEnv(ABC):
         key: PRNGKey,
         state: MultiAgentState,
         actions: MultiAgentActions,
-    ) -> MultiAgentEnvOutput:
+    ):
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.
         """
@@ -113,7 +109,7 @@ class MultiAgentEnv(ABC):
         return obs, states, rewards, dones, infos
 
     @abstractmethod
-    def get_observations(self, state: MultiAgentState) -> MultiAgentObservations:
+    def get_observations(self, state: MultiAgentState):
         """Returns the observations for the given state."""
 
     @property

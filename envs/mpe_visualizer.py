@@ -4,7 +4,7 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .mpe_env import TargetMPEEnvironment, MPEState
+from .target_mpe_env import TargetMPEEnvironment, MPEState
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 

@@ -1,8 +1,8 @@
 import jax
 from jaxmarl.environments.mpe.simple import SimpleMPE
 
-from envs.mpe_env import TargetMPEEnvironment
 from envs.mpe_visualizer import MPEVisualizer
+from envs.target_mpe_env import TargetMPEEnvironment
 
 # Parameters + random keys
 max_steps = 1000
@@ -14,6 +14,7 @@ num_agents = 3
 # Instantiate environment
 env = TargetMPEEnvironment(num_agents=num_agents)
 MARL_env = SimpleMPE(num_agents=num_agents, num_landmarks=num_agents)
+# noinspection DuplicatedCode
 observation, state = env.reset(key_r)
 
 state_seq = []

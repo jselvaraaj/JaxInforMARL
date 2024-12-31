@@ -20,14 +20,18 @@ from .multiagent_env import (
     MultiAgentState,
     MultiAgentEnv,
     AgentLabel,
-    MultiAgentObservations,
     PRNGKey,
     MultiAgentActions,
-    MultiAgentEnvOutput,
     entity_labels_to_indices,
     default,
 )
-from .schema import AgentIndex, EntityIndex, RGB, CoordinateAxisIndex
+from .schema import (
+    AgentIndex,
+    EntityIndex,
+    RGB,
+    CoordinateAxisIndex,
+    MultiAgentObservations,
+)
 from .spaces import Discrete, Box
 
 
@@ -45,14 +49,9 @@ class MPEState(MultiAgentState):
 
 class TargetMPEEnvironment(MultiAgentEnv):
     """
-    Leading axis in an JAX array is the entity index
-    Agent indices are always [0, num_agents-1]
-    Entity indices are always [0, num_agents + num_landmarks - 1]
-    Agent indices are prefix of entity indices
-
-
-    Annotated function types for jax transformed functions correspond to function types after the transformation.
-
+    Discrete Actions  - [do nothing, down, up, left, right] where the 0-indexed value, correspond to action value.
+    Continuous Actions - [x, y, z, w, a, b] where each continuous value corresponds to
+                        the magnitude of the discrete actions.
     """
 
     def __init__(
@@ -185,7 +184,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         return self._discrete_action_to_control_input(self.agent_indices, actions)
 
     @partial(jax.jit, static_argnums=[0])
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservations, MultiAgentState]:
+    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservations, MPEState]:
         """Initialise with random positions"""
 
         key_agent, key_landmark = jax.random.split(key)
@@ -394,7 +393,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         key: PRNGKey,
         state: MPEState,
         actions: MultiAgentActions,
-    ) -> MultiAgentEnvOutput:
+    ):
         u = self._discrete_action_by_label_to_control_input(actions)
 
         key, key_double_integrator = jax.random.split(key)
@@ -410,7 +409,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             dones=dones,
             step=state.step + 1,
         )
-        reward = self.rewards(state)
+        reward = self.reward(state)
         observation = self.get_observations(state)
         dones_with_agent_label = {
             agent_label: dones[i] for i, agent_label in enumerate(self.agent_labels)
@@ -419,7 +418,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         return observation, state, reward, dones_with_agent_label, {}
 
-    def rewards(self, state: MPEState) -> dict[AgentLabel, Float]:
+    def reward(self, state: MPEState) -> dict[AgentLabel, Float]:
         """Return dictionary of agent rewards"""
 
         @partial(jax.vmap, in_axes=[0, None])

@@ -24,13 +24,5 @@ class MultiAgentState:
     step: int
 
 
-MultiAgentEnvOutput: TypeAlias = tuple[
-    MultiAgentObservations,
-    MultiAgentState,
-    MultiAgentRewards,
-    MultiAgentDones,
-    Infos,
-]
-
 PRNGKey: TypeAlias = Array
 RGB: TypeAlias = tuple[int, int, int]
