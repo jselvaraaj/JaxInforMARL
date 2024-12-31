@@ -49,7 +49,7 @@ class MPEState(MultiAgentState):
 
 class TargetMPEEnvironment(MultiAgentEnv):
     """
-    Discrete Actions  - [do nothing, down, up, left, right] where the 0-indexed value, correspond to action value.
+    Discrete Actions  - [do nothing, left, right, down, up] where the 0-indexed value, correspond to action value.
     Continuous Actions - [x, y, z, w, a, b] where each continuous value corresponds to
                         the magnitude of the discrete actions.
     """
