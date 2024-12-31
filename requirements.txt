@@ -1,0 +1,19 @@
+# python=3.10
+
+# formatting
+black
+ruff
+
+# logging
+wandb
+
+# JAX
+jax
+    # Types
+    beartype
+    jaxtyping
+    # JAX Neural networks
+    flax
+    jraph
+    distrax
+    optax
