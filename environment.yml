@@ -8,6 +8,8 @@ dependencies:
   # formatting
   - black
   - ruff
+  - OmegaConf
+  - pydantic
   - pip
   - pip:
       # Installing some jax packages from pip and others from conda causes issues. So everything is installed from pip.
@@ -19,7 +21,8 @@ dependencies:
       # JAX Neural networks
       - flax
       - jraph
+      - distrax
+      - optax
       # RL
-      - gymnax
       # MARL
       - jaxmarl

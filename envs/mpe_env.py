@@ -3,10 +3,9 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from flax import struct
-from gymnax.environments.spaces import Box, Discrete, Space
 from jaxtyping import Float, Array, Int, Bool
 
-from default_env_config import (
+from .default_env_config import (
     DISCRETE_ACT,
     MAX_STEPS,
     DT,
@@ -17,7 +16,7 @@ from default_env_config import (
     CONTACT_MARGIN,
     DAMPING,
 )
-from multiagentenv import (
+from .multiagent_env import (
     MultiAgentState,
     MultiAgentEnv,
     AgentLabel,
@@ -25,31 +24,11 @@ from multiagentenv import (
     PRNGKey,
     MultiAgentActions,
     MultiAgentEnvOutput,
+    entity_labels_to_indices,
+    default,
 )
-from schema import AgentIndex, EntityIndex, EntityLabel, RGB, CoordinateAxisIndex
-
-
-def exists(val):
-    return val is not None
-
-
-def default(val, d):
-    return val if exists(val) else d
-
-
-def entity_labels_to_indices(
-    ids: list[EntityLabel], start: int
-) -> dict[EntityLabel, int]:
-    return {_id: start + i for i, _id in enumerate(ids)}
-
-
-def is_dictionary_of_spaces_for_entities(
-    spaces: dict[EntityLabel, Space], num_entities: int
-):
-    return (
-        all(isinstance(value, Space) for value in spaces.values())
-        and len(spaces) == num_entities
-    )
+from .schema import AgentIndex, EntityIndex, RGB, CoordinateAxisIndex
+from .spaces import Discrete, Box
 
 
 @struct.dataclass
@@ -90,9 +69,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
         dt: float = DT,
         local_ratio=0.5,
     ):
-        super().__init__(num_agents=num_agents, max_steps=max_steps)
+        super().__init__(
+            num_agents=num_agents,
+            max_steps=max_steps,
+            action_spaces=action_spaces,
+            observation_spaces=observation_spaces,
+            agent_labels=agent_labels,
+        )
 
-        self.num_agents = num_agents
         self.num_landmarks = num_agents
         self.num_entities = self.num_agents + self.num_landmarks
         self.agent_indices = jnp.arange(self.num_agents)
@@ -102,42 +86,30 @@ class TargetMPEEnvironment(MultiAgentEnv):
         assert 0.0 <= local_ratio <= 1.0, "local_ratio must be between 0.0 and 1.0"
         self.local_ratio = local_ratio
 
-        assert agent_labels is None or (
-            len(agent_labels) == num_agents
-        ), "agent_ids must be None or have length num_agents"
-        self.agent_labels = default(
-            agent_labels, [f"agent_{i}" for i in range(num_agents)]
-        )
-        self.agent_labels_to_index = entity_labels_to_indices(
-            self.agent_labels, start=0
-        )
-
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]
         self.landmark_labels_to_index = entity_labels_to_indices(
             self.landmark_labels, start=self.num_agents
         )
 
-        assert action_spaces is None or is_dictionary_of_spaces_for_entities(
-            action_spaces, num_agents
-        ), "action_spaces must be None or have length num_agents"
         assert action_type in [DISCRETE_ACT, CONTINUOUS_ACT], "Invalid action type"
         if action_type == DISCRETE_ACT:
             self.action_spaces = default(
-                action_spaces, {i: Discrete(5) for i in self.agent_labels}
+                self.action_spaces, {i: Discrete(5) for i in self.agent_labels}
             )
-            self.action_to_control_input = self._discrete_action_to_control_input
         else:
             self.action_spaces = default(
-                action_spaces, {i: Box(-1, 1, (2,)) for i in self.agent_labels}
+                self.action_spaces, {i: Box(-1, 1, (2,)) for i in self.agent_labels}
             )
-            self.action_to_control_input = self._continuous_action_to_control_input
 
-        assert observation_spaces is None or is_dictionary_of_spaces_for_entities(
-            observation_spaces, num_agents
-        ), "observation_spaces must be None or have length num_agents"
+        self.action_to_control_input = (
+            self._discrete_action_to_control_input
+            if action_type == DISCRETE_ACT
+            else self._continuous_action_to_control_input
+        )
+
         self.observation_spaces = default(
-            observation_spaces,
+            self.observation_spaces,
             {_id: Box(-jnp.inf, jnp.inf, (6,)) for _id in self.agent_labels},
         )
 
@@ -154,7 +126,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         # Environment specific parameters
         self.dt = dt
         self.max_steps = max_steps
-        self.radius = jnp.concatenate(
+        self.entity_radius = jnp.concatenate(
             [jnp.full(self.num_agents, 0.15), jnp.full(self.num_landmarks, 0.2)]
         )
         self.is_moveable = jnp.concatenate(
@@ -163,14 +135,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 jnp.full(self.num_landmarks, False),
             ]
         )
-        self.silent = jnp.full(self.num_agents, 1)
-        self.collide = jnp.full(self.num_entities, False)
-        self.mass = jnp.full(self.num_entities, 1.0)
-        self.accelerations = jnp.full(self.num_agents, 5.0)
-        self.max_speed = jnp.concatenate(
+        self.is_agent_silent = jnp.full(self.num_agents, 1)
+        self.can_entity_collide = jnp.full(self.num_entities, True)
+        self.entity_mass = jnp.full(self.num_entities, 1.0)
+        self.entity_acceleration = jnp.full(self.num_agents, 5.0)
+        self.entity_max_speed = jnp.concatenate(
             [jnp.full(self.num_agents, -1), jnp.full(self.num_landmarks, 0.0)]
         )
-        self.control_noise = jnp.full(self.num_agents, 0)
+        self.agent_control_noise = jnp.full(self.num_agents, 0)
         # self.communication_noise = self.velocity_noise = jnp.concatenate(
         #     [
         #         jnp.full(self.num_agents, 0),
@@ -197,7 +169,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             action % 2 == 0, increase_position, decrease_position
         ) * (action != 0)
         u = u.at[action_to_coordinate_axis].set(u_val)
-        u = u * self.accelerations[agent_index] * self.is_moveable[agent_index]
+        u = u * self.entity_acceleration[agent_index] * self.is_moveable[agent_index]
         return u
 
     def _continuous_action_to_control_input(self, action: Array) -> tuple[float, float]:
@@ -330,7 +302,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
     def _get_collision_force(
         self, entity_a: int, entity_b: int, state: MPEState
     ) -> Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]:
-        distance_min = self.radius[entity_a] + self.radius[entity_b]
+        distance_min = self.entity_radius[entity_a] + self.entity_radius[entity_b]
         delta_position = (
             state.entity_positions[entity_a] - state.entity_positions[entity_b]
         )
@@ -346,8 +318,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
         force = jnp.array([force_a, force_b])
 
         no_collision_condition = (
-            (~self.collide[entity_a])
-            | (~self.collide[entity_b])
+            (~self.can_entity_collide[entity_a])
+            | (~self.can_entity_collide[entity_b])
             | (entity_a == entity_b)
         )
         zero_collision_force = jnp.zeros((2, 2))
@@ -395,7 +367,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         agents_forces = self._control_to_agents_forces(
             key_noise,
             u,
-            self.control_noise,
+            self.agent_control_noise,
             self.is_moveable[: self.num_agents],
         )
 
@@ -410,9 +382,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
             all_forces,
             state.entity_positions,
             state.entity_velocities,
-            self.mass,
+            self.entity_mass,
             self.is_moveable,
-            self.max_speed,
+            self.entity_max_speed,
         )
 
         return entity_positions, entity_velocities
@@ -454,15 +426,25 @@ class TargetMPEEnvironment(MultiAgentEnv):
         def _reward(
             agent_index: Int[Array, AgentIndex], state: MPEState
         ) -> Float[Array, AgentIndex]:
-            return -1 * jnp.min(
-                jnp.sum(
-                    jnp.square(
-                        state.entity_positions[agent_index]
-                        - state.entity_positions[self.num_agents :]
-                    ),
-                    axis=1,
-                )
+            # reward is the negative distance from agent to landmark
+            corresponding_landmark_index = self.num_agents + agent_index
+            return -jnp.sum(
+                jnp.square(
+                    state.entity_positions[agent_index]
+                    - state.entity_positions[corresponding_landmark_index]
+                ),
             )
+
+            # reward is the negative distance from agent to landmark that is closest to it
+            # return -1 * jnp.min(
+            #     jnp.sum(
+            #         jnp.square(
+            #             state.entity_positions[agent_index]
+            #             - state.entity_positions[self.num_agents :]
+            #         ),
+            #         axis=1,
+            #     )
+            # )
 
         reward = _reward(self.agent_indices, state)
         return {
