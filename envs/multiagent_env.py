@@ -3,8 +3,6 @@ from functools import partial
 from typing import final
 
 import jax
-from jax._src.checkify import Error
-from jax.experimental import checkify
 
 from .schema import (
     PRNGKey,
@@ -89,22 +87,28 @@ class MultiAgentEnv(ABC):
 
     @final
     @partial(jax.jit, static_argnums=(0,))
-    @checkify.checkify
     def step(
         self,
         key: PRNGKey,
         state: MultiAgentState,
         actions: MultiAgentActions,
-    ) -> (Error, MultiAgentEnvOutput):
+    ) -> MultiAgentEnvOutput:
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.
         """
-        checkify.check(
-            state.step < self.max_steps,
-            "Cannot step on done state. Reset the environment first.",
-        )
 
         obs, states, rewards, dones, infos = self._step(key, state, actions)
+        key, key_reset = jax.random.split(key)
+
+        obs_reset, states_reset = self.reset(key_reset)
+
+        # Auto-reset environment based on termination
+        states = jax.tree.map(
+            lambda x, y: jax.lax.select(dones["__all__"], x, y), states_reset, states
+        )
+        obs = jax.tree.map(
+            lambda x, y: jax.lax.select(dones["__all__"], x, y), obs_reset, obs
+        )
 
         return obs, states, rewards, dones, infos
 

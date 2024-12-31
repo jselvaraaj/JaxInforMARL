@@ -9,10 +9,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-from beartype.door import is_bearable
+from beartype.door import die_if_unbearable
 from flax.linen.initializers import constant, orthogonal
 from flax.training.train_state import TrainState
-from jax.experimental import checkify
 from jaxtyping import Int, Array, Float, Bool
 
 import envs
@@ -60,9 +59,9 @@ class MPEAddWorldStateToObsWrapper(MARLEnvWrapper):
         state: MultiAgentState,
         actions: MultiAgentActions,
     ):
-        err, (obs, env_state, reward, done, info) = self._env.step(key, state, actions)
+        obs, env_state, reward, done, info = self._env.step(key, state, actions)
         obs["world_state"] = self.world_state(obs)
-        return err, (obs, env_state, reward, done, info)
+        return obs, env_state, reward, done, info
 
     @partial(jax.jit, static_argnums=0)
     def world_state(
@@ -232,10 +231,9 @@ def make_train(config: Config):
         return config.training_config.lr * frac
 
     def train(rng: PRNGKey):
-        checkify.check(
-            is_bearable(env.action_spaces, dict[AgentLabel, Discrete]),
-            "Currently only supports discrete action spaces",
-        )
+        # Currently only supports discrete action spaces
+        die_if_unbearable(env.action_spaces, dict[AgentLabel, Discrete])
+
         train_config = config.training_config
         action_dim = env.action_space_for_agent(env.agent_labels[0]).n
         # INIT NETWORK
@@ -376,9 +374,10 @@ def make_train(config: Config):
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
                 rng_step = jax.random.split(_rng, train_config.num_envs)
-                err, (obs_v, env_state, reward, done, info) = jax.vmap(
+                obs_v, env_state, reward, done, info = jax.vmap(
                     env.step, in_axes=(0, 0, 0)
                 )(rng_step, env_state, env_actions)
+
                 info = jax.tree.map(
                     lambda x: x.reshape(config.derived_values.num_actors), info
                 )
@@ -626,7 +625,6 @@ def make_train(config: Config):
                 shuffled_batch = jax.tree.map(
                     lambda x: jnp.take(x, permutation, axis=1), batch
                 )
-
                 minibatches = jax.tree.map(
                     lambda x: jnp.swapaxes(
                         jnp.reshape(
@@ -674,6 +672,7 @@ def make_train(config: Config):
             train_states = update_state[0]
             metric = traj_batch.info
             metric["loss"] = loss_info
+            metric["returned_episode_returns"] = traj_batch.reward
             rng = update_state[-1]
 
             def callback(metric):

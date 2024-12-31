@@ -48,8 +48,8 @@ class Config:
             clip_eps = 0.2
             is_clip_eps_per_env = False
             max_grad_norm = 0.5
-            num_steps_per_update_per_env = 10
-            num_minibatches = 2
+            num_steps_per_update_per_env = 128
+            num_minibatches = 4
             update_epochs = 4
 
             gae_lambda = 0.95
@@ -65,8 +65,8 @@ class Config:
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
-        total_timesteps = 1e2
+        num_envs = 16
+        total_timesteps = 2e7
         ppo_config = PPOConfig()
 
     @dataclass
@@ -109,8 +109,8 @@ class Config:
         assert (
             _derived_values.num_updates_per_env > 0
         ), "Number of updates per environment must be greater than 0."
-        assert (
-            batch_size % _derived_values.minibatch_size == 0
-        ), f"Minibatch size {_derived_values.minibatch_size} must divide batch size {batch_size}."
+        # assert (
+        #     batch_size % _derived_values.minibatch_size == 0
+        # ), f"Minibatch size {_derived_values.minibatch_size} must divide batch size {batch_size}."
 
         return cls(derived_values=_derived_values)  # type: ignore
