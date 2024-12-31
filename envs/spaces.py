@@ -1,25 +1,30 @@
-""" Built off Gymnax spaces.py, this module contains jittable classes for action and observation spaces. """
+""" Built off JaxMARL spaces.py"""
 
 from collections import OrderedDict
-from typing import Tuple, Union, Sequence
+from typing import Tuple, Sequence
 
-import chex
 import jax
 import jax.numpy as jnp
+from beartype import beartype as typechecker
+from jaxtyping import Array, Bool, Float, jaxtyped
+
+from .schema import PRNGKey
 
 
+@jaxtyped(typechecker=typechecker)
 class Space(object):
     """
     Minimal jittable class for abstract jaxmarl space.
     """
 
-    def sample(self, rng: chex.PRNGKey) -> chex.Array:
+    def sample(self, rng: PRNGKey) -> Array:
         raise NotImplementedError
 
     def contains(self, x: jnp.int_) -> bool:
         raise NotImplementedError
 
 
+@jaxtyped(typechecker=typechecker)
 class Discrete(Space):
     """
     Minimal jittable class for discrete gymnax spaces.
@@ -32,13 +37,13 @@ class Discrete(Space):
         self.shape = ()
         self.dtype = dtype
 
-    def sample(self, rng: chex.PRNGKey) -> chex.Array:
+    def sample(self, rng: PRNGKey) -> Array:
         """Sample random action uniformly from set of categorical choices."""
         return jax.random.randint(
             rng, shape=self.shape, minval=0, maxval=self.n
         ).astype(self.dtype)
 
-    def contains(self, x: jnp.int_) -> bool:
+    def contains(self, x: jnp.int_) -> Bool[Array, "1"]:
         """Check whether specific object is within space."""
         # type_cond = isinstance(x, self.dtype)
         # shape_cond = (x.shape == self.shape)
@@ -46,6 +51,7 @@ class Discrete(Space):
         return range_cond
 
 
+@jaxtyped(typechecker=typechecker)
 class MultiDiscrete(Space):
     """
     Minimal jittable class for multi-discrete gymnax spaces.
@@ -57,7 +63,7 @@ class MultiDiscrete(Space):
         self.shape = (len(num_categories),)
         self.dtype = jnp.int_
 
-    def sample(self, rng: chex.PRNGKey) -> chex.Array:
+    def sample(self, rng: PRNGKey) -> Array:
         """Sample random action uniformly from set of categorical choices."""
         return jax.random.randint(
             rng,
@@ -67,12 +73,13 @@ class MultiDiscrete(Space):
             dtype=self.dtype,
         )
 
-    def contains(self, x: jnp.int_) -> bool:
+    def contains(self, x: jnp.int_) -> Bool[Array, "1"]:
         """Check whether specific object is within space."""
         range_cond = jnp.logical_and(x >= 0, x < self.num_categories)
         return jnp.all(range_cond)
 
 
+@jaxtyped(typechecker=typechecker)
 class Box(Space):
     """
     Minimal jittable class for array-shaped gymnax spaces.
@@ -91,13 +98,13 @@ class Box(Space):
         self.shape = shape
         self.dtype = dtype
 
-    def sample(self, rng: chex.PRNGKey) -> chex.Array:
+    def sample(self, rng: PRNGKey) -> Array:
         """Sample random action uniformly from 1D continuous range."""
         return jax.random.uniform(
             rng, shape=self.shape, minval=self.low, maxval=self.high
         ).astype(self.dtype)
 
-    def contains(self, x: jnp.int_) -> bool:
+    def contains(self, x: jnp.int_) -> Bool[Array, "1"]:
         """Check whether specific object is within space."""
         # type_cond = isinstance(x, self.dtype)
         # shape_cond = (x.shape == self.shape)
@@ -105,6 +112,7 @@ class Box(Space):
         return range_cond
 
 
+@jaxtyped(typechecker=typechecker)
 class Dict(Space):
     """Minimal jittable class for dictionary of simpler jittable spaces."""
 
@@ -112,7 +120,7 @@ class Dict(Space):
         self.spaces = spaces
         self.num_spaces = len(spaces)
 
-    def sample(self, rng: chex.PRNGKey) -> dict:
+    def sample(self, rng: PRNGKey) -> dict:
         """Sample random action from all subspaces."""
         key_split = jax.random.split(rng, self.num_spaces)
         return OrderedDict(
@@ -133,14 +141,15 @@ class Dict(Space):
         return out_of_space == 0
 
 
+@jaxtyped(typechecker=typechecker)
 class Tuple(Space):
     """Minimal jittable class for tuple (product) of jittable spaces."""
 
-    def __init__(self, spaces: Union[tuple, list]):
+    def __init__(self, spaces: tuple[Space] | list[Space]):
         self.spaces = spaces
         self.num_spaces = len(spaces)
 
-    def sample(self, rng: chex.PRNGKey) -> Tuple[chex.Array]:
+    def sample(self, rng: PRNGKey) -> tuple[Float[Array, "..."], ...]:
         """Sample random action from all subspaces."""
         key_split = jax.random.split(rng, self.num_spaces)
         return tuple(

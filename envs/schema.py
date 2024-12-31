@@ -1,7 +1,8 @@
 from typing import TypeAlias
 
+from beartype import beartype as typechecker
 from flax import struct
-from jaxtyping import Array, Bool
+from jaxtyping import Array, Bool, jaxtyped
 
 # Used in python datastructures
 EntityLabel: TypeAlias = str
@@ -18,6 +19,7 @@ AgentIndex = "agent_index"
 CoordinateAxisIndex = "position_index"
 
 
+@jaxtyped(typechecker=typechecker)
 @struct.dataclass
 class MultiAgentState:
     dones: Bool[Array, AgentIndex]

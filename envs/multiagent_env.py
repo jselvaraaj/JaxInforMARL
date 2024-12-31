@@ -3,6 +3,8 @@ from functools import partial
 from typing import final
 
 import jax
+from beartype import beartype as typechecker
+from jaxtyping import jaxtyped
 
 from .schema import (
     PRNGKey,
@@ -37,6 +39,7 @@ def is_dictionary_of_spaces_for_entities(
     )
 
 
+@jaxtyped(typechecker=typechecker)
 class MultiAgentEnv(ABC):
     def __init__(
         self,

@@ -2,8 +2,9 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
+from beartype import beartype as typechecker
 from flax import struct
-from jaxtyping import Float, Array, Int, Bool
+from jaxtyping import Float, Array, Int, Bool, jaxtyped
 
 from .default_env_config import (
     DISCRETE_ACT,
@@ -35,6 +36,7 @@ from .schema import (
 from .spaces import Discrete, Box
 
 
+@jaxtyped(typechecker=typechecker)
 @struct.dataclass
 class MPEState(MultiAgentState):
     """Basic MPE State"""
@@ -47,6 +49,7 @@ class MPEState(MultiAgentState):
     goal: int | None = None
 
 
+@jaxtyped(typechecker=typechecker)
 class TargetMPEEnvironment(MultiAgentEnv):
     """
     Discrete Actions  - [do nothing, left, right, down, up] where the 0-indexed value, correspond to action value.
