@@ -1,5 +1,8 @@
 .idea
 .vscode
+config/mappo_homogenous_rnn_mpe.yaml
+test_ppo.py
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
