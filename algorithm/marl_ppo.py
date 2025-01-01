@@ -5,6 +5,7 @@ Built off JaxMARL mappo_rnn_mpe.py
 from dataclasses import asdict
 from typing import NamedTuple
 
+import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -447,6 +448,10 @@ def make_train(config: MAPPOConfig):
             rng = update_state[-1]
 
             def callback(metric):
+                print(
+                    "progress: ",
+                    metric["update_steps"] / config.derived_values.num_updates_per_env,
+                )
                 wandb.log(
                     {
                         "returns": metric["returned_episode_returns"][-1, :].mean(),
@@ -496,6 +501,11 @@ def main():
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)
+    model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
+    with open("PPO_RNN_Runner_State.pkl", "wb") as f:
+        flax.serialization.to_bytes(out)
+    model_artifact.add_file("PPO_RNN_Runner_State.pkl")
+    wandb.log_artifact(model_artifact)
 
     wandb.finish()
 
