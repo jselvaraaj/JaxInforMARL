@@ -135,7 +135,12 @@ class TargetMPEEnvironment(MultiAgentEnv):
             ]
         )
         self.is_agent_silent = jnp.full(self.num_agents, 1)
-        self.can_entity_collide = jnp.full(self.num_entities, True)
+        self.can_entity_collide = jnp.concatenate(
+            [
+                jnp.full(self.num_agents, True),
+                jnp.full(self.num_landmarks, False),
+            ]
+        )
         self.entity_mass = jnp.full(self.num_entities, 1.0)
         self.entity_acceleration = jnp.full(self.num_agents, 5.0)
         self.entity_max_speed = jnp.concatenate(

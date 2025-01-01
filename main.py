@@ -42,7 +42,7 @@ def get_restored_actor():
 
     running_script_path = os.path.abspath(".")
     checkpoint_dir = os.path.join(
-        running_script_path, "algorithm/PPO_Runner_Checkpoint"
+        running_script_path, "artifacts/PPO_RNN_Runner_State:v0"
     )
 
     sharding = jax.sharding.NamedSharding(
