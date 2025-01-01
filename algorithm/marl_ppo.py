@@ -3,7 +3,6 @@ Built off JaxMARL mappo_rnn_mpe.py
 """
 
 import os
-from dataclasses import asdict
 from typing import NamedTuple
 
 import jax
@@ -47,7 +46,7 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
 def make_env_from_config(config: MAPPOConfig):
     env_class_name = config.env_config.cls_name
     env_class = getattr(envs, env_class_name)
-    env_kwargs = asdict(config.env_config.kwargs)
+    env_kwargs = config.env_config.kwargs.to_dict()
     env = MPEWorldStateWrapper(env_class(**env_kwargs))
     env = MPELogWrapper(env)
     return env

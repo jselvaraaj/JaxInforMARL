@@ -18,8 +18,12 @@ class MAPPOConfig:
                 max_steps: Rollout length in a single environment.
             """
 
-            num_agents = 3
+            num_agents = 6
             max_steps = 25
+
+            def to_dict(self):
+                dict_repr = {"num_agents": self.num_agents, "max_steps": self.max_steps}
+                return dict_repr
 
         cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()
