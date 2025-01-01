@@ -16,3 +16,4 @@ wandb
     jraph
     distrax
     optax
+    orbax

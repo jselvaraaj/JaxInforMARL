@@ -2,20 +2,22 @@
 Built off JaxMARL mappo_rnn_mpe.py
 """
 
+import os
 from dataclasses import asdict
 from typing import NamedTuple
 
-import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import orbax
 import wandb
+from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from jax import block_until_ready
 
 import envs
-from config.mappo_config import Config as MAPPOConfig
+from config.mappo_config import MAPPOConfig as MAPPOConfig
 from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper
 from model.actor_critic_rnn import ActorRNN, CriticRNN, ScannedRNN
 
@@ -42,13 +44,17 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
     return {a: x[i] for i, a in enumerate(agent_list)}
 
 
-def make_train(config: MAPPOConfig):
-    # Make MARL env from config
+def make_env_from_config(config: MAPPOConfig):
     env_class_name = config.env_config.cls_name
     env_class = getattr(envs, env_class_name)
     env_kwargs = asdict(config.env_config.kwargs)
     env = MPEWorldStateWrapper(env_class(**env_kwargs))
     env = MPELogWrapper(env)
+    return env
+
+
+def make_train(config: MAPPOConfig):
+    env = make_env_from_config(config)
 
     ppo_config = config.training_config.ppo_config
 
@@ -502,9 +508,14 @@ def main():
         out = train_jit(rng)
         block_until_ready(out)
     model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
-    with open("PPO_RNN_Runner_State.pkl", "wb") as f:
-        flax.serialization.to_bytes(out)
-    model_artifact.add_file("PPO_RNN_Runner_State.pkl")
+
+    running_script_path = os.path.abspath(".")
+    checkpoint_dir = os.path.join(running_script_path, "PPO_Runner_Checkpoint")
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    save_args = orbax_utils.save_args_from_target(out)
+    orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
+
+    model_artifact.add_dir(checkpoint_dir)
     wandb.log_artifact(model_artifact)
 
     wandb.finish()

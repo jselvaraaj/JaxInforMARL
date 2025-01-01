@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from flax.linen.initializers import constant, orthogonal
 
-from config.mappo_config import Config
+from config.mappo_config import MAPPOConfig
 
 
 class ScannedRNN(nn.Module):
@@ -39,7 +39,7 @@ class ScannedRNN(nn.Module):
 # noinspection DuplicatedCode
 class ActorRNN(nn.Module):
     action_dim: list[int]
-    config: Config
+    config: MAPPOConfig
 
     @nn.compact
     def __call__(self, hidden, x):
@@ -71,7 +71,7 @@ class ActorRNN(nn.Module):
 
 # noinspection DuplicatedCode
 class CriticRNN(nn.Module):
-    config: Config
+    config: MAPPOConfig
 
     @nn.compact
     def __call__(self, hidden, x):

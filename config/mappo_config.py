@@ -7,7 +7,7 @@ from flax.struct import dataclass
 
 @beartype
 @dataclass
-class Config:
+class MAPPOConfig:
     @dataclass
     class EnvConfig:
         @dataclass
@@ -90,7 +90,7 @@ class Config:
     derived_values: DerivedValues = struct.field()
 
     @classmethod
-    def create(cls) -> Config:
+    def create(cls) -> MAPPOConfig:
         env_config = cls.env_config
         train_config = cls.training_config
         num_actors = env_config.kwargs.num_agents * train_config.num_envs

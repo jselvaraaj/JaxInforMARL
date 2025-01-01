@@ -1,36 +1,41 @@
 import jax
-from jaxmarl.environments.mpe.simple import SimpleMPE
+import jax.numpy as jnp
+import orbax
 
-from envs.mpe_visualizer import MPEVisualizer
-from envs.target_mpe_env import TargetMPEEnvironment
+from algorithm.marl_ppo import make_env_from_config
+from config.mappo_config import MAPPOConfig
+from model.actor_critic_rnn import ActorRNN, ScannedRNN
 
-# Parameters + random keys
-max_steps = 1000
-key = jax.random.PRNGKey(0)
-key, key_r = jax.random.split(key, 2)
+config: MAPPOConfig = MAPPOConfig.create()
+env = make_env_from_config(config)
+rng = jax.random.PRNGKey(config.training_config.seed)
 
-num_agents = 3
+rng, _rng_actor = jax.random.split(rng, 2)
 
-# Instantiate environment
-env = TargetMPEEnvironment(num_agents=num_agents)
-MARL_env = SimpleMPE(num_agents=num_agents, num_landmarks=num_agents)
-# noinspection DuplicatedCode
-observation, state = env.reset(key_r)
+num_envs = config.training_config.num_envs
+num_actions = env.action_space_for_agent(env.agent_labels[0]).n
+obs_dim = env.observation_space_for_agent(env.agent_labels[0]).shape[0]
+actor_network = ActorRNN(num_actions, config=config)
+actor_init_x = (
+    jnp.zeros(
+        (
+            1,
+            num_envs,
+            obs_dim,
+        )
+    ),
+    jnp.zeros((1, num_envs)),
+)
+actor_init_hidden_state = ScannedRNN.initialize_carry(
+    num_envs, config.network.gru_hidden_dim
+)
 
-state_seq = []
-print("state", state)
-print("action spaces", env.action_spaces)
+actor_network_params = actor_network.init(
+    _rng_actor, actor_init_hidden_state, actor_init_x
+)
 
-for _ in range(max_steps):
-    state_seq.append(state)
-    key, key_act = jax.random.split(key)
-    key_act = jax.random.split(key_act, env.num_agents)
-    actions = {
-        agent_label: env.action_space_for_agent(agent_label).sample(key_act[i])
-        for i, agent_label in enumerate(env.agent_labels)
-    }
+CKPT_DIR = "PPO_Runner_Checkpoint"
+orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+raw_restored = orbax_checkpointer.restore(CKPT_DIR)
 
-    err, (obs, state, rew, dones, _) = env.step(key, state, actions)
-
-viz = MPEVisualizer(env, state_seq)
-viz.animate(None, view=True)
+print()

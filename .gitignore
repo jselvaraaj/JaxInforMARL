@@ -3,6 +3,7 @@
 config/mappo_homogenous_rnn_mpe.yaml
 test_ppo.py
 .DS_Store
+PPO_Runner_Checkpoint
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
