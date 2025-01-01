@@ -238,9 +238,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
             for i, agent_label in enumerate(self.agent_labels)
         }
 
-    def is_done_state(self, state: MultiAgentState) -> bool:
-        pass
-
     @partial(jax.vmap, in_axes=[None, 0, 0, 0, 0])
     def _control_to_agents_forces(
         self,
@@ -422,7 +419,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         """Return dictionary of agent rewards"""
 
         @partial(jax.vmap, in_axes=[0, None])
-        def _reward(
+        def _dist_between_target_reward(
             agent_index: Int[Array, AgentIndex], state: MPEState
         ) -> Float[Array, AgentIndex]:
             # reward is the negative distance from agent to landmark
@@ -445,8 +442,38 @@ class TargetMPEEnvironment(MultiAgentEnv):
             #     )
             # )
 
-        reward = _reward(self.agent_indices, state)
+        @partial(jax.vmap, in_axes=(0, None))
+        def _collisions(agent_idx: Int[Array, "..."], other_idx: Int[Array, "..."]):
+            return jax.vmap(self.is_collision, in_axes=(None, 0, None))(
+                agent_idx,
+                other_idx,
+                state,
+            )
+
+        agent_agent_collision = _collisions(
+            self.agent_indices,
+            self.agent_indices,
+        )  # [agent, agent, collison]
+
+        def _agent_rew(agent_idx: int, collisions: Bool[Array, "..."]):
+            rew = -1 * jnp.sum(collisions[agent_idx])
+            return rew
+
+        dist_reward = _dist_between_target_reward(self.agent_indices, state)
+
         return {
-            agent_label: reward[agent_index]
+            agent_label: (1 - self.local_ratio) * dist_reward[agent_index]
+            + self.local_ratio * _agent_rew(agent_index, agent_agent_collision)
             for agent_label, agent_index in self.agent_labels_to_index.items()
         }
+
+    def is_collision(self, a: EntityIndex, b: EntityIndex, state: MPEState):
+        """check if two entities are colliding"""
+        dist_min = self.entity_radius[a] + self.entity_radius[b]
+        delta_pos = state.entity_positions[a] - state.entity_positions[b]
+        dist = jnp.sqrt(jnp.sum(jnp.square(delta_pos)))
+        return (
+            (dist < dist_min)
+            & (self.can_entity_collide[a] & self.can_entity_collide[b])
+            & (a != b)
+        )
