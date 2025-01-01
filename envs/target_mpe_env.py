@@ -2,9 +2,8 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype as typechecker
 from flax import struct
-from jaxtyping import Float, Array, Int, Bool, jaxtyped
+from jaxtyping import Float, Array, Int, Bool
 
 from .default_env_config import (
     DISCRETE_ACT,
@@ -22,7 +21,7 @@ from .multiagent_env import (
     MultiAgentEnv,
     AgentLabel,
     PRNGKey,
-    MultiAgentActions,
+    MultiAgentAction,
     entity_labels_to_indices,
     default,
 )
@@ -31,12 +30,11 @@ from .schema import (
     EntityIndex,
     RGB,
     CoordinateAxisIndex,
-    MultiAgentObservations,
+    MultiAgentObservation,
 )
 from .spaces import Discrete, Box
 
 
-@jaxtyped(typechecker=typechecker)
 @struct.dataclass
 class MPEState(MultiAgentState):
     """Basic MPE State"""
@@ -49,7 +47,6 @@ class MPEState(MultiAgentState):
     goal: int | None = None
 
 
-@jaxtyped(typechecker=typechecker)
 class TargetMPEEnvironment(MultiAgentEnv):
     """
     Discrete Actions  - [do nothing, left, right, down, up] where the 0-indexed value, correspond to action value.
@@ -178,7 +175,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         pass
 
     def _discrete_action_by_label_to_control_input(
-        self, actions: MultiAgentActions
+        self, actions: MultiAgentAction
     ) -> Float[Array, f"{AgentIndex} {CoordinateAxisIndex}"]:
         actions = jnp.array(
             [actions[agent_label] for agent_label in self.agent_labels]
@@ -187,7 +184,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         return self._discrete_action_to_control_input(self.agent_indices, actions)
 
     @partial(jax.jit, static_argnums=[0])
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservations, MPEState]:
+    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, MPEState]:
         """Initialise with random positions"""
 
         key_agent, key_landmark = jax.random.split(key)
@@ -213,7 +210,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         return self.get_observations(state), state
 
     @partial(jax.jit, static_argnums=[0])
-    def get_observations(self, state: MPEState) -> MultiAgentObservations:
+    def get_observations(self, state: MPEState) -> MultiAgentObservation:
         """Return dictionary of agent observations"""
 
         @partial(jax.vmap, in_axes=[0, None])
@@ -395,7 +392,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self,
         key: PRNGKey,
         state: MPEState,
-        actions: MultiAgentActions,
+        actions: MultiAgentAction,
     ):
         u = self._discrete_action_by_label_to_control_input(actions)
 

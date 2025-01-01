@@ -7,11 +7,11 @@ from jaxtyping import Array, Bool, jaxtyped
 # Used in python datastructures
 EntityLabel: TypeAlias = str
 AgentLabel: TypeAlias = EntityLabel
-MultiAgentObservations: TypeAlias = dict[AgentLabel, Array]
-MultiAgentActions: TypeAlias = dict[AgentLabel, int]
-MultiAgentRewards: TypeAlias = dict[AgentLabel, float]
-MultiAgentDones: TypeAlias = dict[AgentLabel, Bool]
-Infos: TypeAlias = dict
+MultiAgentObservation: TypeAlias = dict[AgentLabel, Array]
+MultiAgentAction: TypeAlias = dict[AgentLabel, int]
+MultiAgentReward: TypeAlias = dict[AgentLabel, float]
+MultiAgentDone: TypeAlias = dict[AgentLabel, Bool]
+Info: TypeAlias = dict
 
 # Used in JAX Arrays
 EntityIndex = "entity_index"

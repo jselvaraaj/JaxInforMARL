@@ -1,17 +1,15 @@
 from abc import abstractmethod, ABC
 from functools import partial
-from typing import final
 
 import jax
-from beartype import beartype as typechecker
-from jaxtyping import jaxtyped
 
 from .schema import (
     PRNGKey,
     MultiAgentState,
     AgentLabel,
-    MultiAgentActions,
+    MultiAgentAction,
     EntityLabel,
+    MultiAgentObservation,
 )
 from .spaces import Space
 
@@ -39,7 +37,6 @@ def is_dictionary_of_spaces_for_entities(
     )
 
 
-@jaxtyped(typechecker=typechecker)
 class MultiAgentEnv(ABC):
     def __init__(
         self,
@@ -77,20 +74,19 @@ class MultiAgentEnv(ABC):
         )
 
     @abstractmethod
-    def reset(self, key: PRNGKey):
+    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, MultiAgentState]:
         """Performs resetting of the environment."""
 
     @abstractmethod
-    def _step(self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentActions):
+    def _step(self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentAction):
         """Environment-specific step transition."""
 
-    @final
     @partial(jax.jit, static_argnums=(0,))
     def step(
         self,
         key: PRNGKey,
         state: MultiAgentState,
-        actions: MultiAgentActions,
+        actions: MultiAgentAction,
     ):
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.

@@ -13,7 +13,7 @@ def get_direction_vector(vec1, vec2):
     return dist_traveled
 
 
-class TestSum(unittest.TestCase):
+class TargetMPEEnvTest(unittest.TestCase):
     @staticmethod
     def set_up():
         # Parameters + random keys
@@ -65,8 +65,8 @@ class TestSum(unittest.TestCase):
         Test that the target mpe rewards is the negative of squared distance between agent and landmark.
         """
 
-        env, state, max_steps, key = TestSum.set_up()
-        state = TestSum.get_init_state(key, env)
+        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        state = TargetMPEEnvTest.get_init_state(key, env)
 
         for _ in range(max_steps):
             key, key_act = jax.random.split(key)
@@ -102,8 +102,8 @@ class TestSum(unittest.TestCase):
         Test that the target mpe do nothing discrete action works.
         """
 
-        env, state, max_steps, key = TestSum.set_up()
-        state = TestSum.get_init_state(key, env)
+        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        state = TargetMPEEnvTest.get_init_state(key, env)
 
         prev_state = state
 
@@ -124,8 +124,8 @@ class TestSum(unittest.TestCase):
         Test that the target mpe left discrete action works.
         """
 
-        env, state, max_steps, key = TestSum.set_up()
-        init_state = TestSum.get_init_state(key, env)
+        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
         for _ in range(max_steps):
@@ -149,8 +149,8 @@ class TestSum(unittest.TestCase):
         Test that the target mpe right discrete action works.
         """
 
-        env, state, max_steps, key = TestSum.set_up()
-        init_state = TestSum.get_init_state(key, env)
+        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
         for _ in range(max_steps):
@@ -174,8 +174,8 @@ class TestSum(unittest.TestCase):
         Test that the target mpe down discrete action works.
         """
 
-        env, state, max_steps, key = TestSum.set_up()
-        init_state = TestSum.get_init_state(key, env)
+        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
         for _ in range(max_steps):
@@ -199,8 +199,8 @@ class TestSum(unittest.TestCase):
         Test that the target mpe up discrete action works.
         """
 
-        env, state, max_steps, key = TestSum.set_up()
-        init_state = TestSum.get_init_state(key, env)
+        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
         for _ in range(max_steps):

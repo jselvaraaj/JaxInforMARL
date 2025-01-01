@@ -10,11 +10,6 @@ from flax.struct import dataclass
 class Config:
     @dataclass
     class EnvConfig:
-        """
-        Attributes:
-            gamma: discount factor.
-        """
-
         @dataclass
         class EnvKwArgs:
             """
@@ -27,7 +22,6 @@ class Config:
             max_steps = 25
 
         cls_name = "TargetMPEEnvironment"
-        gamma = 0.99
         kwargs = EnvKwArgs()
 
     @dataclass
@@ -59,20 +53,28 @@ class Config:
         """
         Attributes:
             total_timesteps: Total time steps across all parallel environments.
+            gamma: discount factor.
         """
 
         seed = 1
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 16
-        total_timesteps = 2e7
+        num_envs = 4
+        gamma = 0.99
+        total_timesteps = 1e4
         ppo_config = PPOConfig()
 
     @dataclass
     class NetworkConfig:
         fc_dim_size = 128
         gru_hidden_dim = 128
+
+    @dataclass
+    class WandbConfig:
+        entity = "josssdan"
+        project = "JaxInforMARL"
+        mode = "disabled"
 
     @dataclass
     class DerivedValues:
@@ -84,6 +86,7 @@ class Config:
     env_config = EnvConfig()
     training_config = TrainingConfig()
     network = NetworkConfig()
+    wandb = WandbConfig()
     derived_values: DerivedValues = struct.field()
 
     @classmethod
