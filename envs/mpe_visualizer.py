@@ -29,6 +29,8 @@ class MPEVisualizer(object):
         self.entity_artists = []
         self.step_counter = None
 
+        self.labels = []
+
         self.init_render()
 
     def animate(
@@ -68,6 +70,19 @@ class MPEVisualizer(object):
                 self.env.entity_radius[i],
                 color=np.array(self.env.color[i]) / 255,
             )
+            if i < self.env.num_agents:
+                label = f"A {i}"
+            else:
+                label = f"T {i - self.env.num_agents}"
+            self.labels.append(
+                self.ax.text(
+                    state.entity_positions[i][0].item(),
+                    state.entity_positions[i][1].item(),
+                    label,
+                    ha="center",
+                    va="center",
+                )
+            )
             self.ax.add_patch(c)
             self.entity_artists.append(c)
 
@@ -77,6 +92,8 @@ class MPEVisualizer(object):
         state = self.state_seq[frame]
         for i, c in enumerate(self.entity_artists):
             c.center = state.entity_positions[i]
+        for i, l in enumerate(self.labels):
+            l.set_position(state.entity_positions[i])
         self.step_counter.set_text(f"Step: {state.step}")
 
         return self.entity_artists + [self.step_counter]
