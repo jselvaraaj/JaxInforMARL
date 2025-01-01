@@ -508,6 +508,10 @@ def main():
         out = train_jit(rng)
         block_until_ready(out)
     model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
+    out = {
+        "actor_train_params": out["runner_state"][0][0][0].params,
+        # "critic_train_state": out["runner_state"][0][0][1].params,
+    }
 
     running_script_path = os.path.abspath(".")
     checkpoint_dir = os.path.join(running_script_path, "PPO_Runner_Checkpoint")

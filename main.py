@@ -1,3 +1,5 @@
+import os
+
 import jax
 import jax.numpy as jnp
 import orbax
@@ -34,8 +36,29 @@ actor_network_params = actor_network.init(
     _rng_actor, actor_init_hidden_state, actor_init_x
 )
 
-CKPT_DIR = "PPO_Runner_Checkpoint"
-orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-raw_restored = orbax_checkpointer.restore(CKPT_DIR)
+running_script_path = os.path.abspath(".")
+checkpoint_dir = os.path.join(running_script_path, "algorithm/PPO_Runner_Checkpoint")
+
+sharding = jax.sharding.NamedSharding(
+    jax.sharding.Mesh(jax.devices(), ("model",)),
+    jax.sharding.PartitionSpec(
+        "model",
+    ),
+)
+
+abstract_actor_params = jax.tree_util.tree_map(
+    orbax.checkpoint.utils.to_shape_dtype_struct, actor_network_params
+)
+
+abstract_state = {
+    "actor_train_params": abstract_actor_params,
+}
+
+ckptr = orbax.checkpoint.AsyncCheckpointer(orbax.checkpoint.StandardCheckpointHandler())
+
+raw_restored = ckptr.restore(
+    checkpoint_dir,
+    args=orbax.checkpoint.args.StandardRestore(abstract_state, strict=False),
+)
 
 print()
