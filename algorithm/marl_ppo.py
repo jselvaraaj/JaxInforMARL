@@ -502,7 +502,7 @@ def main():
         mode=config.wandb.mode,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
-    with jax.disable_jit(False):
+    with jax.disable_jit(True):
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)

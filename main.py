@@ -42,7 +42,7 @@ def get_restored_actor():
 
     running_script_path = os.path.abspath(".")
     checkpoint_dir = os.path.join(
-        running_script_path, "artifacts/PPO_RNN_Runner_State:v0"
+        running_script_path, "artifacts/PPO_RNN_Runner_State:v1"
     )
 
     sharding = jax.sharding.NamedSharding(
@@ -71,17 +71,17 @@ def get_restored_actor():
 
     restored_actor_params = raw_restored["actor_train_params"]
 
-    return actor_network, restored_actor_params, actor_init_hidden_state
+    return config, actor_network, restored_actor_params, actor_init_hidden_state
 
 
 if __name__ == "__main__":
-    actor, restored_params, actor_init_hidden_state = get_restored_actor()
+    config, actor, restored_params, actor_init_hidden_state = get_restored_actor()
 
-    max_steps = 25
+    max_steps = config.env_config.kwargs.max_steps
     key = jax.random.PRNGKey(0)
     key, key_r = jax.random.split(key, 2)
 
-    num_agents = 3
+    num_agents = config.env_config.kwargs.num_agents
 
     env = TargetMPEEnvironment(num_agents=num_agents)
     obs, state = env.reset(key_r)

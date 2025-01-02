@@ -20,7 +20,7 @@ class MPEVisualizer(object):
         self.fig = None
         self.env = env
 
-        self.interval = 100
+        self.interval = 200
         self.state_seq = state_seq
         self.reward_seq = reward_seq
 

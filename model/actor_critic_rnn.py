@@ -69,6 +69,19 @@ class ActorRNN(nn.Module):
         return hidden, pi
 
 
+class GraphTransformerActorRNN(nn.Module):
+    action_dim: list[int]
+    config: MAPPOConfig
+
+    @nn.compact
+    def __call__(self, hidden, x):
+
+        rnn_actor_on_agent_obs = ActorRNN(self.action_dim, self.config)
+        hidden, pi = rnn_actor_on_agent_obs(hidden, x)
+
+        return hidden, pi
+
+
 # noinspection DuplicatedCode
 class CriticRNN(nn.Module):
     config: MAPPOConfig
