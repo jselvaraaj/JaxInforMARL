@@ -68,6 +68,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         observation_spaces: dict[AgentLabel, Discrete | Box] = None,
         color: RGB = None,
         neighborhood_radius: None | Float[Array, f"{AgentIndex}"] = None,
+        node_feature_dim: int = 7,
         # communication_message_dim: int = 0,
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
@@ -131,6 +132,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.neighborhood_radius = default(
             neighborhood_radius, jnp.full(num_agents, 1.0)
         )
+
+        assert node_feature_dim > 0, "node_feature_dim must be 0"
+        self.node_feature_dim = node_feature_dim
 
         # self.communication_message_dim = communication_message_dim
         self.position_dim = position_dim
@@ -261,21 +265,19 @@ class TargetMPEEnvironment(MultiAgentEnv):
         }
 
     def get_graph(self, state: MultiAgentState) -> MultiAgentGraph:
-        nodes = jnp.zeros((self.num_agents, 1))
-        n_node = jnp.array([self.num_agents])
+        nodes = jnp.zeros((self.num_agents * self.num_entities, self.node_feature_dim))
+        n_node = jnp.array([self.num_entities] * self.num_agents)
         n_edge = jnp.array([0])
+        graph = GraphsTuple(
+            nodes=nodes,
+            edges=None,
+            globals=None,
+            receivers=None,
+            senders=None,
+            n_node=n_node,
+            n_edge=n_edge,
+        )
 
-        graph = {
-            "": GraphsTuple(
-                nodes=nodes,
-                edges=None,
-                globals=None,
-                receivers=None,
-                senders=None,
-                n_node=n_node,
-                n_edge=n_edge,
-            )
-        }
         return graph
 
     @partial(jax.vmap, in_axes=[None, 0, 0, 0, 0])

@@ -17,6 +17,7 @@ from envs.schema import (
     MultiAgentDone,
     Info,
     MultiAgentReward,
+    MultiAgentGraph,
 )
 
 
@@ -35,7 +36,9 @@ class MARLWrapper(MultiAgentEnv):
     def get_observation(self, state: MultiAgentState):
         return self._env.get_observation(state)
 
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, MultiAgentState]:
+    def reset(
+        self, key: PRNGKey
+    ) -> tuple[MultiAgentObservation, MultiAgentGraph, MultiAgentState]:
         return self._env.reset(key)
 
     def _step(self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentAction):
@@ -51,20 +54,27 @@ class MARLWrapper(MultiAgentEnv):
         ]
         return sum([space.shape[-1] for space in spaces])
 
+    def get_graph(self, state: MultiAgentState) -> MultiAgentGraph:
+        return self._env.get_graph(state)
+
+    @property
+    def num_entities(self):
+        return self._env.num_entities
+
 
 class MPEWorldStateWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=0)
     def reset(self, key):
-        obs, env_state = self._env.reset(key)
+        obs, graph, env_state = self._env.reset(key)
         obs["world_state"] = self.world_state(obs)
-        return obs, env_state
+        return obs, graph, env_state
 
     @partial(jax.jit, static_argnums=0)
     def step(self, key, state, action):
-        obs, env_state, reward, done, info = self._env.step(key, state, action)
+        obs, graph, env_state, reward, done, info = self._env.step(key, state, action)
         obs["world_state"] = self.world_state(obs)
-        return obs, env_state, reward, done, info
+        return obs, graph, env_state, reward, done, info
 
     @partial(jax.jit, static_argnums=0)
     def world_state(self, obs):
@@ -102,8 +112,10 @@ class LogWrapper(MARLWrapper):
         self.replace_info = replace_info
 
     @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, LogEnvState]:
-        obs, env_state = self._env.reset(key)
+    def reset(
+        self, key: PRNGKey
+    ) -> tuple[MultiAgentObservation, MultiAgentGraph, LogEnvState]:
+        obs, graph, env_state = self._env.reset(key)
         state = LogEnvState(
             env_state,
             jnp.zeros((self._env.num_agents,)),
@@ -111,7 +123,7 @@ class LogWrapper(MARLWrapper):
             jnp.zeros((self._env.num_agents,)),
             jnp.zeros((self._env.num_agents,)),
         )
-        return obs, state
+        return obs, graph, state
 
     @partial(jax.jit, static_argnums=(0,))
     def step(
@@ -120,9 +132,14 @@ class LogWrapper(MARLWrapper):
         state: LogEnvState,
         action: MultiAgentAction,
     ) -> tuple[
-        MultiAgentObservation, LogEnvState, MultiAgentReward, MultiAgentDone, Info
+        MultiAgentObservation,
+        MultiAgentGraph,
+        LogEnvState,
+        MultiAgentReward,
+        MultiAgentDone,
+        Info,
     ]:
-        obs, env_state, reward, done, info = self._env.step(
+        obs, graph, env_state, reward, done, info = self._env.step(
             key, state.env_state, action
         )
         ep_done = done["__all__"]
@@ -142,7 +159,7 @@ class LogWrapper(MARLWrapper):
         info["returned_episode_returns"] = state.returned_episode_returns
         info["returned_episode_lengths"] = state.returned_episode_lengths
         info["returned_episode"] = jnp.full((self._env.num_agents,), ep_done)
-        return obs, state, reward, done, info
+        return obs, graph, state, reward, done, info
 
 
 class MPELogWrapper(LogWrapper):
@@ -156,9 +173,14 @@ class MPELogWrapper(LogWrapper):
         state: LogEnvState,
         action: MultiAgentAction,
     ) -> tuple[
-        MultiAgentObservation, LogEnvState, MultiAgentReward, MultiAgentDone, Info
+        MultiAgentObservation,
+        MultiAgentGraph,
+        LogEnvState,
+        MultiAgentReward,
+        MultiAgentDone,
+        Info,
     ]:
-        obs, env_state, reward, done, info = self._env.step(
+        obs, graph, env_state, reward, done, info = self._env.step(
             key, state.env_state, action
         )
         reward_log = jax.tree.map(
@@ -181,4 +203,4 @@ class MPELogWrapper(LogWrapper):
         info["returned_episode_returns"] = state.returned_episode_returns
         info["returned_episode_lengths"] = state.returned_episode_lengths
         info["returned_episode"] = jnp.full((self._env.num_agents,), ep_done)
-        return obs, state, reward, done, info
+        return obs, graph, state, reward, done, info

@@ -7,6 +7,7 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import jraph
 import numpy as np
 import optax
 import orbax
@@ -14,6 +15,8 @@ import wandb
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from jax import block_until_ready
+from jaxtyping import Float, Array, Int
+from jraph import GraphsTuple
 
 import envs
 from config.mappo_config import MAPPOConfig as MAPPOConfig
@@ -29,6 +32,7 @@ class Transition(NamedTuple):
     reward: jnp.ndarray
     log_prob: jnp.ndarray
     obs: jnp.ndarray
+    graph: jraph.GraphsTuple
     world_state: jnp.ndarray
     info: jnp.ndarray
 
@@ -43,10 +47,25 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
     return {a: x[i] for i, a in enumerate(agent_list)}
 
 
+def batchify_graph(graph: GraphsTuple, num_entities: int):
+
+    nodes = graph.nodes
+    n_node = graph.n_node
+
+    nodes: Float[Array, "graph_id entity_id features"] = nodes.reshape(
+        (-1,) + (num_entities,) + nodes.shape[-1:]
+    )
+    n_node: Int[Array, "graph_id"] = n_node.flatten()
+
+    return graph._replace(nodes=nodes, n_node=n_node)
+
+
 def make_env_from_config(config: MAPPOConfig):
     env_class_name = config.env_config.cls_name
     env_class = getattr(envs, env_class_name)
-    env_kwargs = config.env_config.kwargs.to_dict()
+    env_kwargs = config.env_config.kwargs.to_dict() | {
+        "node_feature_dim": config.network.node_feature_dim
+    }
     env = MPEWorldStateWrapper(env_class(**env_kwargs))
     env = MPELogWrapper(env)
     return env
@@ -74,6 +93,25 @@ def make_train(config: MAPPOConfig):
         )
         critic_network = CriticRNN(config=config)
         rng, _rng_actor, _rng_critic = jax.random.split(rng, 3)
+
+        nodes = jnp.zeros(
+            (
+                num_env * env.num_agents,
+                env.num_entities,
+                config.network.node_feature_dim,
+            )
+        )
+        n_node = jnp.array(num_env * env.num_agents * [env.num_entities])
+        n_edge = jnp.array([0])
+        graph_init = GraphsTuple(
+            nodes=nodes,
+            edges=None,
+            globals=None,
+            receivers=None,
+            senders=None,
+            n_node=n_node,
+            n_edge=n_edge,
+        )
         ac_init_x = (
             jnp.zeros(
                 (
@@ -82,6 +120,7 @@ def make_train(config: MAPPOConfig):
                     env.observation_space_for_agent(env.agent_labels[0]).shape[0],
                 )
             ),
+            graph_init,
             jnp.zeros((1, num_env)),
         )
         ac_init_hstate = ScannedRNN.initialize_carry(
@@ -140,7 +179,8 @@ def make_train(config: MAPPOConfig):
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, num_env)
-        obsv, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
+        obs_v, graph_v, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
+        graph_v = batchify_graph(graph_v, env.num_entities)
         ac_init_hstate = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
@@ -154,9 +194,15 @@ def make_train(config: MAPPOConfig):
             runner_state, update_steps = update_runner_state
 
             def _env_step(runner_state, unused):
-                train_states, env_state, last_obs, last_done, hstates, rng = (
-                    runner_state
-                )
+                (
+                    train_states,
+                    env_state,
+                    last_obs,
+                    last_graph,
+                    last_done,
+                    hstates,
+                    rng,
+                ) = runner_state
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
@@ -165,6 +211,7 @@ def make_train(config: MAPPOConfig):
                 )
                 ac_in = (
                     obs_batch[jnp.newaxis, :],
+                    last_graph,
                     last_done[jnp.newaxis, :],
                 )
                 ac_hstate, pi = actor_network.apply(
@@ -191,9 +238,10 @@ def make_train(config: MAPPOConfig):
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
                 rng_step = jax.random.split(_rng, num_env)
-                obsv, env_state, reward, done, info = jax.vmap(
+                obs_v, graph_v, env_state, reward, done, info = jax.vmap(
                     env.step, in_axes=(0, 0, 0)
                 )(rng_step, env_state, env_act)
+                graph_v = batchify_graph(graph_v, env.num_entities)
                 info = jax.tree.map(
                     lambda x: x.reshape(config.derived_values.num_actors), info
                 )
@@ -210,13 +258,15 @@ def make_train(config: MAPPOConfig):
                     ).squeeze(),
                     log_prob.squeeze(),
                     obs_batch,
+                    last_graph,
                     world_state,
                     info,
                 )
                 runner_state = (
                     train_states,
                     env_state,
-                    obsv,
+                    obs_v,
+                    graph_v,
                     done_batch,
                     (ac_hstate, cr_hstate),
                     rng,
@@ -229,7 +279,9 @@ def make_train(config: MAPPOConfig):
             )
 
             # CALCULATE ADVANTAGE
-            train_states, env_state, last_obs, last_done, hstates, rng = runner_state
+            train_states, env_state, last_obs, last_graph, last_done, hstates, rng = (
+                runner_state
+            )
 
             last_world_state = last_obs["world_state"].swapaxes(0, 1)
             last_world_state = last_world_state.reshape(
@@ -286,11 +338,12 @@ def make_train(config: MAPPOConfig):
                     )
 
                     def _actor_loss_fn(actor_params, init_hstate, traj_batch, gae):
+                        graph_batch = batchify_graph(traj_batch.graph, env.num_entities)
                         # RERUN NETWORK
                         _, pi = actor_network.apply(
                             actor_params,
                             init_hstate.squeeze(),
-                            (traj_batch.obs, traj_batch.done),
+                            (traj_batch.obs, graph_batch, traj_batch.done),
                         )
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -391,7 +444,8 @@ def make_train(config: MAPPOConfig):
                     lambda x: jnp.reshape(x, (1, config.derived_values.num_actors, -1)),
                     init_hstates,
                 )
-
+                # traj_batch.graph.nodes: Float[Array, "num_steps num_env*num_agent; num_entities, node_feature_dim"]
+                # remember last two axis are for one graph
                 batch = (
                     init_hstates[0],
                     init_hstates[1],
@@ -470,14 +524,23 @@ def make_train(config: MAPPOConfig):
             metric["update_steps"] = update_steps
             jax.experimental.io_callback(callback, None, metric)
             update_steps += 1
-            runner_state = (train_states, env_state, last_obs, last_done, hstates, rng)
+            runner_state = (
+                train_states,
+                env_state,
+                last_obs,
+                last_graph,
+                last_done,
+                hstates,
+                rng,
+            )
             return (runner_state, update_steps), metric
 
         rng, _rng = jax.random.split(rng)
         runner_state = (
             (actor_train_state, critic_train_state),
             env_state,
-            obsv,
+            obs_v,
+            graph_v,
             jnp.zeros(config.derived_values.num_actors, dtype=bool),
             (ac_init_hstate, cr_init_hstate),
             _rng,

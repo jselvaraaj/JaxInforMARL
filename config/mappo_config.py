@@ -18,7 +18,7 @@ class MAPPOConfig:
                 max_steps: Rollout length in a single environment.
             """
 
-            num_agents = 6
+            num_agents = 3
             max_steps = 25
 
             def to_dict(self):
@@ -73,6 +73,7 @@ class MAPPOConfig:
     class NetworkConfig:
         fc_dim_size = 128
         gru_hidden_dim = 128
+        node_feature_dim = 7
 
     @dataclass
     class WandbConfig:

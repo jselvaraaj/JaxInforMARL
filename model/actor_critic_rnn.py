@@ -76,7 +76,12 @@ class GraphTransformerActorRNN(nn.Module):
     @nn.compact
     def __call__(self, hidden, x):
 
-        hidden, pi = ActorRNN(self.action_dim, self.config)(hidden, x)
+        obs, graph, dones = x
+
+        # nodes: Float[Array, "graph_id entity_id features"]
+        # n_node: Int[Array, "graph_id"]
+
+        hidden, pi = ActorRNN(self.action_dim, self.config)(hidden, (obs, dones))
 
         return hidden, pi
 
