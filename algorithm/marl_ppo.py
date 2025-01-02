@@ -18,7 +18,7 @@ from jax import block_until_ready
 import envs
 from config.mappo_config import MAPPOConfig as MAPPOConfig
 from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper
-from model.actor_critic_rnn import ActorRNN, CriticRNN, ScannedRNN
+from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphTransformerActorRNN
 
 
 class Transition(NamedTuple):
@@ -69,7 +69,7 @@ def make_train(config: MAPPOConfig):
         nonlocal env, config, ppo_config, linear_schedule
         num_env = config.training_config.num_envs
         # INIT NETWORK
-        actor_network = ActorRNN(
+        actor_network = GraphTransformerActorRNN(
             env.action_space_for_agent(env.agent_labels[0]).n, config=config
         )
         critic_network = CriticRNN(config=config)
@@ -164,8 +164,8 @@ def make_train(config: MAPPOConfig):
                     last_obs, env.agent_labels, config.derived_values.num_actors
                 )
                 ac_in = (
-                    obs_batch[np.newaxis, :],
-                    last_done[np.newaxis, :],
+                    obs_batch[jnp.newaxis, :],
+                    last_done[jnp.newaxis, :],
                 )
                 ac_hstate, pi = actor_network.apply(
                     train_states[0].params, hstates[0], ac_in
@@ -502,24 +502,24 @@ def main():
         mode=config.wandb.mode,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
-    with jax.disable_jit(True):
+    with jax.disable_jit(False):
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)
-    model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
     out = {
         "actor_train_params": out["runner_state"][0][0][0].params,
         # "critic_train_state": out["runner_state"][0][0][1].params,
     }
 
-    running_script_path = os.path.abspath(".")
-    checkpoint_dir = os.path.join(running_script_path, "PPO_Runner_Checkpoint")
-    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    save_args = orbax_utils.save_args_from_target(out)
-    orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
-
-    model_artifact.add_dir(checkpoint_dir)
-    wandb.log_artifact(model_artifact)
+    if wandb.run.mode == "online":
+        model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
+        running_script_path = os.path.abspath(".")
+        checkpoint_dir = os.path.join(running_script_path, "PPO_Runner_Checkpoint")
+        orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+        save_args = orbax_utils.save_args_from_target(out)
+        orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
+        model_artifact.add_dir(checkpoint_dir)
+        wandb.log_artifact(model_artifact)
 
     wandb.finish()
 

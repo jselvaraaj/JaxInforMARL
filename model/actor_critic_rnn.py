@@ -76,8 +76,7 @@ class GraphTransformerActorRNN(nn.Module):
     @nn.compact
     def __call__(self, hidden, x):
 
-        rnn_actor_on_agent_obs = ActorRNN(self.action_dim, self.config)
-        hidden, pi = rnn_actor_on_agent_obs(hidden, x)
+        hidden, pi = ActorRNN(self.action_dim, self.config)(hidden, x)
 
         return hidden, pi
 

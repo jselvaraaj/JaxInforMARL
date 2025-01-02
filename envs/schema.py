@@ -3,6 +3,7 @@ from typing import TypeAlias
 from beartype import beartype as typechecker
 from flax import struct
 from jaxtyping import Array, Bool, jaxtyped
+from jraph import GraphsTuple
 
 # Used in python datastructures
 EntityLabel: TypeAlias = str
@@ -10,8 +11,10 @@ AgentLabel: TypeAlias = EntityLabel
 MultiAgentObservation: TypeAlias = dict[AgentLabel, Array]
 MultiAgentAction: TypeAlias = dict[AgentLabel, int]
 MultiAgentReward: TypeAlias = dict[AgentLabel, float]
+MultiAgentGraph: TypeAlias = dict[AgentLabel, GraphsTuple]
 MultiAgentDone: TypeAlias = dict[AgentLabel, Bool]
 Info: TypeAlias = dict
+
 
 # Used in JAX Arrays
 EntityIndex = "entity_index"

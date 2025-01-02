@@ -10,6 +10,7 @@ from .schema import (
     MultiAgentAction,
     EntityLabel,
     MultiAgentObservation,
+    MultiAgentGraph,
 )
 from .spaces import Space
 
@@ -74,7 +75,7 @@ class MultiAgentEnv(ABC):
         )
 
     @abstractmethod
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, MultiAgentState]:
+    def reset(self, key: PRNGKey):
         """Performs resetting of the environment."""
 
     @abstractmethod
@@ -92,24 +93,31 @@ class MultiAgentEnv(ABC):
         Override _step instead.
         """
 
-        obs, states, rewards, dones, infos = self._step(key, state, actions)
+        obs, graph, state, reward, done, info = self._step(key, state, actions)
         key, key_reset = jax.random.split(key)
 
-        obs_reset, states_reset = self.reset(key_reset)
+        obs_reset, graph_reset, states_reset = self.reset(key_reset)
 
         # Auto-reset environment based on termination
-        states = jax.tree.map(
-            lambda x, y: jax.lax.select(dones["__all__"], x, y), states_reset, states
+        state = jax.tree.map(
+            lambda x, y: jax.lax.select(done["__all__"], x, y), states_reset, state
         )
         obs = jax.tree.map(
-            lambda x, y: jax.lax.select(dones["__all__"], x, y), obs_reset, obs
+            lambda x, y: jax.lax.select(done["__all__"], x, y), obs_reset, obs
+        )
+        graph = jax.tree.map(
+            lambda x, y: jax.lax.select(done["__all__"], x, y), graph_reset, graph
         )
 
-        return obs, states, rewards, dones, infos
+        return obs, graph, state, reward, done, info
 
     @abstractmethod
-    def get_observations(self, state: MultiAgentState):
+    def get_observation(self, state: MultiAgentState) -> MultiAgentObservation:
         """Returns the observations for the given state."""
+
+    @abstractmethod
+    def get_graph(self, state: MultiAgentState) -> MultiAgentGraph:
+        """Returns the neighborhood graph for the given state."""
 
     @property
     def name(self) -> str:

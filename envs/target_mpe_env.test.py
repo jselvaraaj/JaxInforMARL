@@ -24,9 +24,9 @@ class TargetMPEEnvTest(unittest.TestCase):
         num_agents = 3
 
         env = TargetMPEEnvironment(num_agents=num_agents)
-        observation, state = env.reset(key_r)
+        observation, graph, state = env.reset(key_r)
 
-        return env, state, max_steps, key
+        return env, graph, state, max_steps, key
 
     @staticmethod
     def get_init_state(key: PRNGKey, env):
@@ -102,7 +102,7 @@ class TargetMPEEnvTest(unittest.TestCase):
         Test that the target mpe do nothing discrete action works.
         """
 
-        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
         state = TargetMPEEnvTest.get_init_state(key, env)
 
         prev_state = state
@@ -111,7 +111,7 @@ class TargetMPEEnvTest(unittest.TestCase):
             key, key_env = jax.random.split(key)
             action = {agent_label: 0 for i, agent_label in enumerate(env.agent_labels)}
 
-            obs, state, rew, dones, _ = env.step(key_env, state, action)
+            obs, _, state, rew, dones, _ = env.step(key_env, state, action)
             self.assertTrue(
                 jnp.array_equal(prev_state.entity_positions, state.entity_positions),
                 f"{prev_state.entity_positions} != {state.entity_positions}",
@@ -124,7 +124,7 @@ class TargetMPEEnvTest(unittest.TestCase):
         Test that the target mpe left discrete action works.
         """
 
-        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
         init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
@@ -132,7 +132,7 @@ class TargetMPEEnvTest(unittest.TestCase):
             key, key_env = jax.random.split(key)
             action = {agent_label: 1 for i, agent_label in enumerate(env.agent_labels)}
 
-            obs, state, rew, dones, _ = env.step(key_env, state, action)
+            obs, _, state, rew, dones, _ = env.step(key_env, state, action)
 
         init_state_agent_positions = init_state.entity_positions[: env.num_agents]
         state_agent_positions = state.entity_positions[: env.num_agents]
@@ -149,7 +149,7 @@ class TargetMPEEnvTest(unittest.TestCase):
         Test that the target mpe right discrete action works.
         """
 
-        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
         init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
@@ -157,7 +157,7 @@ class TargetMPEEnvTest(unittest.TestCase):
             key, key_env = jax.random.split(key)
             action = {agent_label: 2 for i, agent_label in enumerate(env.agent_labels)}
 
-            obs, state, rew, dones, _ = env.step(key_env, state, action)
+            obs, _, state, rew, dones, _ = env.step(key_env, state, action)
 
         init_state_agent_positions = init_state.entity_positions[: env.num_agents]
         state_agent_positions = state.entity_positions[: env.num_agents]
@@ -174,7 +174,7 @@ class TargetMPEEnvTest(unittest.TestCase):
         Test that the target mpe down discrete action works.
         """
 
-        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
         init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
@@ -182,7 +182,7 @@ class TargetMPEEnvTest(unittest.TestCase):
             key, key_env = jax.random.split(key)
             action = {agent_label: 3 for i, agent_label in enumerate(env.agent_labels)}
 
-            obs, state, rew, dones, _ = env.step(key_env, state, action)
+            obs, _, state, rew, dones, _ = env.step(key_env, state, action)
 
         init_state_agent_positions = init_state.entity_positions[: env.num_agents]
         state_agent_positions = state.entity_positions[: env.num_agents]
@@ -199,7 +199,7 @@ class TargetMPEEnvTest(unittest.TestCase):
         Test that the target mpe up discrete action works.
         """
 
-        env, state, max_steps, key = TargetMPEEnvTest.set_up()
+        env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
         init_state = TargetMPEEnvTest.get_init_state(key, env)
         state = init_state
 
@@ -207,7 +207,7 @@ class TargetMPEEnvTest(unittest.TestCase):
             key, key_env = jax.random.split(key)
             action = {agent_label: 4 for i, agent_label in enumerate(env.agent_labels)}
 
-            obs, state, rew, dones, _ = env.step(key_env, state, action)
+            obs, _, state, rew, dones, _ = env.step(key_env, state, action)
 
         init_state_agent_positions = init_state.entity_positions[: env.num_agents]
         state_agent_positions = state.entity_positions[: env.num_agents]

@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 from jaxtyping import Float, Array, Int, Bool
+from jraph import GraphsTuple
 
 from .default_env_config import (
     DISCRETE_ACT,
@@ -31,6 +32,10 @@ from .schema import (
     RGB,
     CoordinateAxisIndex,
     MultiAgentObservation,
+    MultiAgentReward,
+    MultiAgentDone,
+    Info,
+    MultiAgentGraph,
 )
 from .spaces import Discrete, Box
 
@@ -62,6 +67,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         action_spaces: dict[AgentLabel, Discrete | Box] = None,
         observation_spaces: dict[AgentLabel, Discrete | Box] = None,
         color: RGB = None,
+        neighborhood_radius: None | Float[Array, f"{AgentIndex}"] = None,
         # communication_message_dim: int = 0,
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
@@ -117,6 +123,13 @@ class TargetMPEEnvironment(MultiAgentEnv):
         ), "color must have length num_agents + num_landmarks. Note num_landmark = num_agents"
         self.color = default(
             color, [AGENT_COLOR] * self.num_agents + [OBS_COLOR] * self.num_landmarks
+        )
+
+        assert (
+            neighborhood_radius is None or neighborhood_radius.shape[0] == num_agents
+        ), "neighborhood_radius must be provided for each agent"
+        self.neighborhood_radius = default(
+            neighborhood_radius, jnp.full(num_agents, 1.0)
         )
 
         # self.communication_message_dim = communication_message_dim
@@ -189,7 +202,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
         return self._discrete_action_to_control_input(self.agent_indices, actions)
 
     @partial(jax.jit, static_argnums=[0])
-    def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, MPEState]:
+    def reset(
+        self, key: PRNGKey
+    ) -> tuple[MultiAgentObservation, MultiAgentGraph, MPEState]:
         """Initialise with random positions"""
 
         key_agent, key_landmark = jax.random.split(key)
@@ -211,11 +226,13 @@ class TargetMPEEnvironment(MultiAgentEnv):
             dones=jnp.full(self.num_agents, False),
             step=0,
         )
+        obs = self.get_observation(state)
+        graph = self.get_graph(state)
 
-        return self.get_observations(state), state
+        return obs, graph, state
 
     @partial(jax.jit, static_argnums=[0])
-    def get_observations(self, state: MPEState) -> MultiAgentObservation:
+    def get_observation(self, state: MPEState) -> MultiAgentObservation:
         """Return dictionary of agent observations"""
 
         @partial(jax.vmap, in_axes=[0, None])
@@ -242,6 +259,24 @@ class TargetMPEEnvironment(MultiAgentEnv):
             agent_label: observation[i]
             for i, agent_label in enumerate(self.agent_labels)
         }
+
+    def get_graph(self, state: MultiAgentState) -> MultiAgentGraph:
+        nodes = jnp.zeros((self.num_agents, 1))
+        n_node = jnp.array([self.num_agents])
+        n_edge = jnp.array([0])
+
+        graph = {
+            "": GraphsTuple(
+                nodes=nodes,
+                edges=None,
+                globals=None,
+                receivers=None,
+                senders=None,
+                n_node=n_node,
+                n_edge=n_edge,
+            )
+        }
+        return graph
 
     @partial(jax.vmap, in_axes=[None, 0, 0, 0, 0])
     def _control_to_agents_forces(
@@ -395,7 +430,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
         key: PRNGKey,
         state: MPEState,
         actions: MultiAgentAction,
-    ):
+    ) -> tuple[
+        MultiAgentObservation,
+        MultiAgentGraph,
+        MultiAgentState,
+        MultiAgentReward,
+        MultiAgentDone,
+        Info,
+    ]:
         u = self._discrete_action_by_label_to_control_input(actions)
 
         key, key_double_integrator = jax.random.split(key)
@@ -412,13 +454,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
             step=state.step + 1,
         )
         reward = self.reward(state)
-        observation = self.get_observations(state)
+        observation = self.get_observation(state)
+        graph = self.get_graph(state)
         dones_with_agent_label = {
             agent_label: dones[i] for i, agent_label in enumerate(self.agent_labels)
         }
         dones_with_agent_label.update({"__all__": jnp.all(dones)})
 
-        return observation, state, reward, dones_with_agent_label, {}
+        return observation, graph, state, reward, dones_with_agent_label, {}
 
     def reward(self, state: MPEState) -> dict[AgentLabel, Float]:
         """Return dictionary of agent rewards"""
@@ -436,23 +479,12 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 ),
             )
 
-            # reward is the negative distance from agent to landmark that is closest to it
-            # return -1 * jnp.min(
-            #     jnp.sum(
-            #         jnp.square(
-            #             state.entity_positions[agent_index]
-            #             - state.entity_positions[self.num_agents :]
-            #         ),
-            #         axis=1,
-            #     )
-            # )
-
         @partial(jax.vmap, in_axes=(0, None))
         def _collisions(agent_idx: Int[Array, "..."], other_idx: Int[Array, "..."]):
             return jax.vmap(self.is_collision, in_axes=(None, 0, None))(
                 agent_idx,
                 other_idx,
-                state,
+                state,  # type: ignore
             )
 
         agent_agent_collision = _collisions(

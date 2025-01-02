@@ -14,6 +14,9 @@ from envs.schema import (
     PRNGKey,
     MultiAgentObservation,
     MultiAgentAction,
+    MultiAgentDone,
+    Info,
+    MultiAgentReward,
 )
 
 
@@ -29,8 +32,8 @@ class MARLWrapper(MultiAgentEnv):
         )
         self._env = env
 
-    def get_observations(self, state: MultiAgentState):
-        return self._env.get_observations(state)
+    def get_observation(self, state: MultiAgentState):
+        return self._env.get_observation(state)
 
     def reset(self, key: PRNGKey) -> tuple[MultiAgentObservation, MultiAgentState]:
         return self._env.reset(key)
@@ -116,7 +119,9 @@ class LogWrapper(MARLWrapper):
         key: PRNGKey,
         state: LogEnvState,
         action: MultiAgentAction,
-    ) -> tuple[MultiAgentObservation, LogEnvState, float, bool, dict]:
+    ) -> tuple[
+        MultiAgentObservation, LogEnvState, MultiAgentReward, MultiAgentDone, Info
+    ]:
         obs, env_state, reward, done, info = self._env.step(
             key, state.env_state, action
         )
@@ -150,7 +155,9 @@ class MPELogWrapper(LogWrapper):
         key: PRNGKey,
         state: LogEnvState,
         action: MultiAgentAction,
-    ) -> tuple[MultiAgentObservation, LogEnvState, float, bool, dict]:
+    ) -> tuple[
+        MultiAgentObservation, LogEnvState, MultiAgentReward, MultiAgentDone, Info
+    ]:
         obs, env_state, reward, done, info = self._env.step(
             key, state.env_state, action
         )
