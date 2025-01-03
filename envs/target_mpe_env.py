@@ -73,7 +73,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
         dt: float = DT,
-        local_ratio=0.5,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -88,9 +87,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.agent_indices = jnp.arange(self.num_agents)
         self.entity_indices = jnp.arange(self.num_entities)
         self.landmark_indices = jnp.arange(self.num_agents, self.num_entities)
-
-        assert 0.0 <= local_ratio <= 1.0, "local_ratio must be between 0.0 and 1.0"
-        self.local_ratio = local_ratio
 
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]
@@ -494,15 +490,16 @@ class TargetMPEEnvironment(MultiAgentEnv):
             self.agent_indices,
         )  # [agent, agent, collison]
 
-        def _agent_rew(agent_idx: int, collisions: Bool[Array, "..."]):
-            rew = -1 * jnp.sum(collisions[agent_idx])
-            return rew
-
+        # def _agent_rew(agent_idx: int, collisions: Bool[Array, "..."]):
+        #     rew = -1 * jnp.sum(collisions[agent_idx])
+        #     return rew
         dist_reward = _dist_between_target_reward(self.agent_indices, state)
 
+        global_dist_rew = -1 * jnp.sum(dist_reward)
+        global_agent_collision_rew = -1 * jnp.sum(agent_agent_collision)
+
         return {
-            agent_label: (1 - self.local_ratio) * dist_reward[agent_index]
-            + self.local_ratio * _agent_rew(agent_index, agent_agent_collision)
+            agent_label: global_dist_rew + global_agent_collision_rew
             for agent_label, agent_index in self.agent_labels_to_index.items()
         }
 
