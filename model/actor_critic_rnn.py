@@ -80,6 +80,7 @@ class GraphTransformerActorRNN(nn.Module):
 
         # nodes: Float[Array, "graph_id entity_id features"]
         # n_node: Int[Array, "graph_id"]
+        # here graph_id is like batch_id. One different environment/batch has different graphs
 
         hidden, pi = ActorRNN(self.action_dim, self.config)(hidden, (obs, dones))
 

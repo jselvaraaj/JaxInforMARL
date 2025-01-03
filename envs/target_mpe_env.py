@@ -57,6 +57,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
     Discrete Actions  - [do nothing, left, right, down, up] where the 0-indexed value, correspond to action value.
     Continuous Actions - [x, y, z, w, a, b] where each continuous value corresponds to
                         the magnitude of the discrete actions.
+
     """
 
     def __init__(
@@ -87,6 +88,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.agent_indices = jnp.arange(self.num_agents)
         self.entity_indices = jnp.arange(self.num_entities)
         self.landmark_indices = jnp.arange(self.num_agents, self.num_entities)
+
+        self.agent_entity_type = 0
+        self.landmark_entity_type = 1
 
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]
@@ -260,16 +264,121 @@ class TargetMPEEnvironment(MultiAgentEnv):
             for i, agent_label in enumerate(self.agent_labels)
         }
 
-    def get_graph(self, state: MultiAgentState) -> MultiAgentGraph:
-        nodes = jnp.zeros((self.num_agents * self.num_entities, self.node_feature_dim))
-        n_node = jnp.array([self.num_entities] * self.num_agents)
-        n_edge = jnp.array([0])
+    @partial(jax.jit, static_argnums=[0])
+    def get_graph(self, state: MPEState) -> MultiAgentGraph:
+
+        @partial(jax.vmap)
+        def get_node_feature(
+            entity_idx: Int[Array, EntityIndex]
+        ) -> Int[Array, f"{EntityIndex} 7"]:
+
+            goal_idx = jnp.where(
+                entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
+            )
+
+            goal_relative_coord = (
+                state.entity_positions[goal_idx] - state.entity_positions[entity_idx]
+            )
+            entity_type = jnp.where(
+                entity_idx < self.num_agents,
+                self.agent_entity_type,
+                self.landmark_entity_type,
+            )
+            node_feature = jnp.concatenate(
+                [
+                    state.entity_positions[entity_idx],
+                    state.entity_velocities[entity_idx],
+                    goal_relative_coord,
+                    jnp.array([entity_type]),
+                ],
+            )
+            return node_feature
+
+        # @partial(jax.vmap)
+        # def get_agent_to_entity_edge(agent_idx: Int[Array, AgentIndex]) -> tuple[
+        #     Int[Array, f"{AgentIndex} EdgeIndex 2"],
+        #     Int[Array, f"{AgentIndex} EdgeIndex 2"],
+        #     Int[Array, f"{AgentIndex} EdgeIndex 1"],
+        # ]:
+        #     agent_position = state.entity_positions[agent_idx]
+        #     dist = jnp.linalg.norm(
+        #         state.entity_positions - agent_position[None], axis=1
+        #     )
+        #
+        #     agent_idx_v = jnp.full(self.num_entities, agent_idx)
+        #     # From entity to agent edges.
+        #     # Note the agent to agent edges are not directly included here but will be added.
+        #     # For example the edge for agent_idx to some other agent will be added in the other agent's computation.
+        #     is_entity_within_agent_neighborhood = (
+        #         dist <= self.neighborhood_radius[agent_idx]
+        #     )
+        #     senders = jnp.where(
+        #         is_entity_within_agent_neighborhood,
+        #         self.entity_indices,
+        #         jnp.full(self.num_entities, -1),
+        #     )
+        #
+        #     receivers = jnp.where(
+        #         is_entity_within_agent_neighborhood,
+        #         agent_idx_v,
+        #         jnp.full(self.num_entities, -1),
+        #     )
+        #
+        #     edge_feature = jnp.where(
+        #         is_entity_within_agent_neighborhood,
+        #         dist,
+        #         jnp.full(self.num_entities, -1),
+        #     )
+        #
+        #     return receivers, senders, edge_feature
+        #
+        # def add_landmark_self_edges(receivers, senders):
+        #     landmark_idx = jnp.arange(self.num_agents, self.num_entities)
+        #     receivers = jnp.concatenate([receivers, landmark_idx])
+        #     senders = jnp.concatenate([senders, landmark_idx])
+        #     return receivers, senders
+
+        ### 2) Compute pairwise distances in one shot
+        # agent_positions shape: (num_agents, 2)
+        agent_positions = state.entity_positions[self.agent_indices]
+        # entity_positions shape: (num_entities, 2)
+        entity_positions = state.entity_positions
+        # Broadcast to shape: (num_agents, num_entities, 2)
+        # distances shape: (num_agents, num_entities)
+        distances = jnp.linalg.norm(
+            agent_positions[:, None, :] - entity_positions[None, :, :], axis=-1
+        )
+        mask = distances <= self.neighborhood_radius[:, None]
+        max_num_edge = self.num_entities * (self.num_entities - 1)
+        valid_agent_idx, valid_entity_idx = jnp.nonzero(
+            mask, size=max_num_edge, fill_value=-1
+        )
+        # Receivers = agent indices, Senders = entity indices (since edges go entity->agent here).
+        receivers = valid_agent_idx  # shape: (num_valid_edges,)
+        senders = valid_entity_idx  # shape: (num_valid_edges,)
+
+        edge_features = distances[valid_agent_idx, valid_entity_idx][..., None]
+
+        # add self edges for landmarks
+        receivers = jnp.concatenate([self.landmark_indices, receivers])
+        senders = jnp.concatenate([self.landmark_indices, senders])
+        edge_features = jnp.concatenate(
+            [edge_features, jnp.zeros(self.num_landmarks)[..., None]]
+        )
+
+        # edges = get_agent_to_entity_edge(self.agent_indices)
+        # receivers, senders, edge_features = jax.tree.map(jnp.ravel, edges)
+        # receivers, senders = add_landmark_self_edges(receivers, senders)
+
+        node_features = get_node_feature(self.entity_indices)
+        n_node = jnp.array([self.num_entities])
+        n_edge = jnp.array([receivers.shape[0]])
         graph = GraphsTuple(
-            nodes=nodes,
-            edges=None,
+            nodes=node_features,
+            edges=edge_features,
             globals=None,
-            receivers=None,
-            senders=None,
+            receivers=receivers,
+            senders=senders,
             n_node=n_node,
             n_edge=n_edge,
         )

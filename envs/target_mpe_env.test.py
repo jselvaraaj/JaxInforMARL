@@ -101,23 +101,30 @@ class TargetMPEEnvTest(unittest.TestCase):
         """
         Test that the target mpe do nothing discrete action works.
         """
+        with jax.disable_jit(True):
 
-        env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
-        state = TargetMPEEnvTest.get_init_state(key, env)
+            env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
+            state = TargetMPEEnvTest.get_init_state(key, env)
 
-        prev_state = state
-
-        for _ in range(max_steps):
-            key, key_env = jax.random.split(key)
-            action = {agent_label: 0 for i, agent_label in enumerate(env.agent_labels)}
-
-            obs, _, state, rew, dones, _ = env.step(key_env, state, action)
-            self.assertTrue(
-                jnp.array_equal(prev_state.entity_positions, state.entity_positions),
-                f"{prev_state.entity_positions} != {state.entity_positions}",
-            )
+            graph = env.get_graph(state)
 
             prev_state = state
+
+            for _ in range(max_steps):
+                key, key_env = jax.random.split(key)
+                action = {
+                    agent_label: 0 for i, agent_label in enumerate(env.agent_labels)
+                }
+
+                obs, _, state, rew, dones, _ = env.step(key_env, state, action)
+                self.assertTrue(
+                    jnp.array_equal(
+                        prev_state.entity_positions, state.entity_positions
+                    ),
+                    f"{prev_state.entity_positions} != {state.entity_positions}",
+                )
+
+                prev_state = state
 
     def test_target_mpe_left_action(self):
         """

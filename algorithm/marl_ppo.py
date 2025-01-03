@@ -51,13 +51,30 @@ def batchify_graph(graph: GraphsTuple, num_entities: int):
 
     nodes = graph.nodes
     n_node = graph.n_node
+    n_edge = graph.edges
+    edges = graph.edges
+    receivers = graph.receivers
+    senders = graph.senders
 
     nodes: Float[Array, "graph_id entity_id features"] = nodes.reshape(
         (-1,) + (num_entities,) + nodes.shape[-1:]
     )
+    edges: Float[Array, "graph_id edge_id features"] = edges.reshape(
+        (-1,) + edges.shape[-2:]
+    )
+    receivers = receivers.reshape((-1,) + receivers.shape[-1:])
+    senders = senders.reshape((-1,) + senders.shape[-1:])
     n_node: Int[Array, "graph_id"] = n_node.flatten()
+    n_edge: Int[Array, "graph_id"] = n_edge.flatten()
 
-    return graph._replace(nodes=nodes, n_node=n_node)
+    return graph._replace(
+        nodes=nodes,
+        n_node=n_node,
+        edges=edges,
+        receivers=receivers,
+        senders=senders,
+        n_edge=n_edge,
+    )
 
 
 def make_env_from_config(config: MAPPOConfig):
@@ -96,19 +113,37 @@ def make_train(config: MAPPOConfig):
 
         nodes = jnp.zeros(
             (
-                num_env * env.num_agents,
+                num_env,
                 env.num_entities,
                 config.network.node_feature_dim,
             )
         )
-        n_node = jnp.array(num_env * env.num_agents * [env.num_entities])
-        n_edge = jnp.array([0])
+        edges = jnp.zeros(
+            (
+                num_env,
+                env.num_entities * env.num_agents,
+            )
+        )
+        receivers = jnp.zeros(
+            (
+                num_env,
+                env.num_entities * env.num_agents,
+            )
+        )
+        senders = jnp.zeros(
+            (
+                num_env,
+                env.num_entities * env.num_agents,
+            )
+        )
+        n_node = jnp.array(num_env * [env.num_entities])
+        n_edge = jnp.array(num_env * [env.num_entities * env.num_agents])
         graph_init = GraphsTuple(
             nodes=nodes,
-            edges=None,
+            edges=edges,
             globals=None,
-            receivers=None,
-            senders=None,
+            receivers=receivers,
+            senders=senders,
             n_node=n_node,
             n_edge=n_edge,
         )
@@ -565,7 +600,7 @@ def main():
         mode=config.wandb.mode,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
-    with jax.disable_jit(True):
+    with jax.disable_jit(False):
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)
