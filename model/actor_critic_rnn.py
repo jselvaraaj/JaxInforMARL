@@ -87,7 +87,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
         def linear_layer(x):
             return nn.Dense(
-                self.config.network.fc_dim_size,
+                self.config.network.graph_fc_dim_size,
                 kernel_init=orthogonal(jnp.sqrt(2)),
                 bias_init=constant(0.0),
             )(x)
@@ -111,7 +111,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             softmax_logits: Float[Array, "edge_id, edge_id"] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=1
-            ) / jnp.sqrt(self.config.network.fc_dim_size)
+            ) / jnp.sqrt(self.config.network.graph_fc_dim_size)
 
             # Compute the softmax weights on the entire tree.
             weights = utils.segment_softmax(
