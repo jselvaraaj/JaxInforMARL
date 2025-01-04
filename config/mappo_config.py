@@ -89,7 +89,7 @@ class MAPPOConfig:
     @dataclass
     class DerivedValues:
         num_actors: int
-        num_updates_per_env: int
+        num_updates: int
         minibatch_size: int
         scaled_clip_eps: float
 
@@ -107,7 +107,7 @@ class MAPPOConfig:
         batch_size = num_actors * train_config.ppo_config.num_steps_per_update
         _derived_values = cls.DerivedValues(
             num_actors=num_actors,
-            num_updates_per_env=int(
+            num_updates=int(
                 train_config.total_timesteps
                 // train_config.num_envs
                 // train_config.ppo_config.num_steps_per_update
@@ -122,7 +122,7 @@ class MAPPOConfig:
             ),
         )
         assert (
-            _derived_values.num_updates_per_env > 0
+            _derived_values.num_updates > 0
         ), "Number of updates per environment must be greater than 0."
         # assert (
         #     batch_size % _derived_values.minibatch_size == 0

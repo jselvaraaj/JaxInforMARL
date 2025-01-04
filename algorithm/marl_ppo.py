@@ -101,7 +101,7 @@ def make_train(config: MAPPOConfig):
         frac = (
             1.0
             - (count // (ppo_config.num_minibatches_actors * ppo_config.update_epochs))
-            / config.derived_values.num_updates_per_env
+            / config.derived_values.num_updates
         )
         return config.training_config.lr * frac
 
@@ -576,7 +576,7 @@ def make_train(config: MAPPOConfig):
             def callback(metric):
                 print(
                     "progress: ",
-                    metric["update_steps"] / config.derived_values.num_updates_per_env,
+                    metric["update_steps"] / config.derived_values.num_updates,
                 )
                 wandb.log(
                     {
@@ -616,7 +616,7 @@ def make_train(config: MAPPOConfig):
             _update_step,
             (runner_state, 0),
             None,
-            config.derived_values.num_updates_per_env,
+            config.derived_values.num_updates,
         )
         return {"runner_state": runner_state}
 
