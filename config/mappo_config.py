@@ -77,7 +77,7 @@ class MAPPOConfig:
         embedding_dim = 4
         num_graph_attn_layers = 2
         graph_fc_dim_size = 16
-        num_heads_per_attn_layer = 2
+        num_heads_per_attn_layer = 3
 
     @dataclass
     class WandbConfig:
