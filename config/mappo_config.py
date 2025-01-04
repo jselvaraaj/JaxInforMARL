@@ -74,6 +74,9 @@ class MAPPOConfig:
         fc_dim_size = 128
         gru_hidden_dim = 128
         node_feature_dim = 7
+        embedding_dim = 4
+        num_graph_attn_layers = 2
+        num_heads_per_attn_layer = 2
 
     @dataclass
     class WandbConfig:

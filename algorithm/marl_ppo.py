@@ -118,23 +118,34 @@ def make_train(config: MAPPOConfig):
                 config.network.node_feature_dim,
             )
         )
-        edges = jnp.zeros(
-            (
-                num_env,
-                env.num_entities * env.num_agents,
-            )
+        nodes = nodes.at[..., -1].set(1)  # entity type
+
+        edges = jnp.arange(num_env * 2 * env.num_entities).reshape(
+            num_env,
+            2 * env.num_entities,
+            1,
         )
-        receivers = jnp.zeros(
-            (
-                num_env,
-                env.num_entities * env.num_agents,
-            )
+        sender_receiver_shape = (
+            num_env,
+            2 * env.num_entities,
         )
-        senders = jnp.zeros(
-            (
-                num_env,
-                env.num_entities * env.num_agents,
-            )
+        receivers = jnp.broadcast_to(
+            jnp.concatenate(
+                [
+                    jnp.arange(env.num_entities),
+                    jnp.arange(env.num_entities),
+                ]
+            ),
+            sender_receiver_shape,
+        )
+        senders = jnp.broadcast_to(
+            jnp.concatenate(
+                [
+                    jnp.arange(env.num_entities),
+                    jnp.flip(jnp.arange(env.num_entities)),
+                ]
+            ),
+            sender_receiver_shape,
         )
         n_node = jnp.array(num_env * [env.num_entities])
         n_edge = jnp.array(num_env * [env.num_entities * env.num_agents])
@@ -600,7 +611,7 @@ def main():
         mode=config.wandb.mode,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
-    with jax.disable_jit(False):
+    with jax.disable_jit(True):
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)
