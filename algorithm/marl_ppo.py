@@ -15,11 +15,10 @@ import wandb
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from jax import block_until_ready
-from jaxtyping import Float, Array, Int
-from jraph import GraphsTuple
 
 import envs
 from config.mappo_config import MAPPOConfig as MAPPOConfig
+from envs.target_mpe_env import GraphsTupleWithAgentIndex
 from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper
 from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphTransformerActorRNN
 
@@ -39,7 +38,9 @@ class Transition(NamedTuple):
 
 def batchify(x: dict, agent_list, num_actors):
     x = jnp.stack([x[a] for a in agent_list])
-    return x.reshape((num_actors, -1))
+    return x.reshape(
+        (num_actors, -1)
+    )  # [agent_0_env_1, agent_0_env_2 ....agent_n_env_(m-1), agent_n_env_m]
 
 
 def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
@@ -47,25 +48,28 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
     return {a: x[i] for i, a in enumerate(agent_list)}
 
 
-def batchify_graph(graph: GraphsTuple, num_entities: int):
+def batchify_graph(graph: GraphsTupleWithAgentIndex, num_env, num_agents: int):
+    nodes, edges, receivers, senders, _, n_node, n_edge, _ = graph
 
-    nodes = graph.nodes
-    n_node = graph.n_node
-    n_edge = graph.edges
-    edges = graph.edges
-    receivers = graph.receivers
-    senders = graph.senders
+    receivers = receivers.astype(jnp.int32)
+    senders = senders.astype(jnp.int32)
 
-    nodes: Float[Array, "graph_id entity_id features"] = nodes.reshape(
-        (-1,) + (num_entities,) + nodes.shape[-1:]
-    )
-    edges: Float[Array, "graph_id edge_id features"] = edges.reshape(
-        (-1,) + edges.shape[-2:]
-    )
-    receivers = receivers.reshape((-1,) + receivers.shape[-1:])
-    senders = senders.reshape((-1,) + senders.shape[-1:])
-    n_node: Int[Array, "graph_id"] = n_node.flatten()
-    n_edge: Int[Array, "graph_id"] = n_edge.flatten()
+    n_node = n_node.flatten()
+    n_edge = n_edge.flatten()
+
+    def _stack_for_each_agent(x):
+        return jnp.stack([x] * num_agents).reshape(-1, *x.shape[1:])
+
+    # repeat the same graph for each agent/actor
+    nodes = _stack_for_each_agent(nodes)
+    edges = _stack_for_each_agent(edges)
+    receivers = _stack_for_each_agent(receivers)
+    senders = _stack_for_each_agent(senders)
+    n_node = _stack_for_each_agent(n_node)
+    agent_indices = jnp.repeat(
+        jnp.arange(num_agents)[..., None], repeats=num_env, axis=1
+    ).flatten()
+    n_edge = _stack_for_each_agent(n_edge)
 
     return graph._replace(
         nodes=nodes,
@@ -74,6 +78,7 @@ def batchify_graph(graph: GraphsTuple, num_entities: int):
         receivers=receivers,
         senders=senders,
         n_edge=n_edge,
+        agent_indices=agent_indices,
     )
 
 
@@ -96,7 +101,7 @@ def make_train(config: MAPPOConfig):
     def linear_schedule(count):
         frac = (
             1.0
-            - (count // (ppo_config.num_minibatches * ppo_config.update_epochs))
+            - (count // (ppo_config.num_minibatches_actors * ppo_config.update_epochs))
             / config.derived_values.num_updates_per_env
         )
         return config.training_config.lr * frac
@@ -120,20 +125,20 @@ def make_train(config: MAPPOConfig):
         )
         nodes = nodes.at[..., -1].set(1)  # entity type
 
-        edges = jnp.arange(num_env * 2 * env.num_entities).reshape(
+        edges = jnp.arange(num_env * 2 * env.num_agents).reshape(
             num_env,
-            2 * env.num_entities,
+            2 * env.num_agents,
             1,
         )
         sender_receiver_shape = (
             num_env,
-            2 * env.num_entities,
+            2 * env.num_agents,
         )
         receivers = jnp.broadcast_to(
             jnp.concatenate(
                 [
-                    jnp.arange(env.num_entities),
-                    jnp.arange(env.num_entities),
+                    jnp.arange(env.num_agents),
+                    jnp.arange(env.num_agents),
                 ]
             ),
             sender_receiver_shape,
@@ -141,36 +146,43 @@ def make_train(config: MAPPOConfig):
         senders = jnp.broadcast_to(
             jnp.concatenate(
                 [
-                    jnp.arange(env.num_entities),
-                    jnp.flip(jnp.arange(env.num_entities)),
+                    jnp.arange(env.num_agents),
+                    jnp.flip(jnp.arange(env.num_agents)),
                 ]
             ),
             sender_receiver_shape,
         )
         n_node = jnp.array(num_env * [env.num_entities])
-        n_edge = jnp.array(num_env * [env.num_entities * env.num_agents])
-        graph_init = GraphsTuple(
-            nodes=nodes,
-            edges=edges,
-            globals=None,
-            receivers=receivers,
-            senders=senders,
-            n_node=n_node,
-            n_edge=n_edge,
+        n_edge = jnp.array(num_env * [2 * env.num_agents])
+        graph_init = batchify_graph(
+            GraphsTupleWithAgentIndex(
+                nodes=nodes,
+                edges=edges,
+                globals=None,
+                receivers=receivers,
+                senders=senders,
+                n_node=n_node,
+                n_edge=n_edge,
+                agent_indices=None,
+            ),
+            config.training_config.num_envs,
+            env.num_agents,
         )
+        graph_init = jax.tree.map(lambda x: x[jnp.newaxis, ...], graph_init)
+        num_actors = config.derived_values.num_actors
         ac_init_x = (
             jnp.zeros(
                 (
                     1,
-                    num_env,
+                    num_actors,
                     env.observation_space_for_agent(env.agent_labels[0]).shape[0],
                 )
             ),
             graph_init,
-            jnp.zeros((1, num_env)),
+            jnp.zeros((1, num_actors)),
         )
         ac_init_hstate = ScannedRNN.initialize_carry(
-            config.training_config.num_envs, config.network.gru_hidden_dim
+            num_actors, config.network.gru_hidden_dim
         )
         actor_network_params = actor_network.init(_rng_actor, ac_init_hstate, ac_init_x)
 
@@ -178,14 +190,14 @@ def make_train(config: MAPPOConfig):
             jnp.zeros(
                 (
                     1,
-                    num_env,
+                    num_actors,
                     env.world_state_size(),
                 )
             ),  #  + env.observation_space(env.agents[0]).shape[0]
-            jnp.zeros((1, num_env)),
+            jnp.zeros((1, num_actors)),
         )
         cr_init_hstate = ScannedRNN.initialize_carry(
-            num_env, config.network.gru_hidden_dim
+            num_actors, config.network.gru_hidden_dim
         )
         critic_network_params = critic_network.init(
             _rng_critic, cr_init_hstate, cr_init_x
@@ -226,7 +238,6 @@ def make_train(config: MAPPOConfig):
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, num_env)
         obs_v, graph_v, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
-        graph_v = batchify_graph(graph_v, env.num_entities)
         ac_init_hstate = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
@@ -255,9 +266,12 @@ def make_train(config: MAPPOConfig):
                 obs_batch = batchify(
                     last_obs, env.agent_labels, config.derived_values.num_actors
                 )
+                graph_batch = batchify_graph(
+                    last_graph, config.training_config.num_envs, env.num_agents
+                )
                 ac_in = (
                     obs_batch[jnp.newaxis, :],
-                    last_graph,
+                    jax.tree.map(lambda x: x[jnp.newaxis, ...], graph_batch),
                     last_done[jnp.newaxis, :],
                 )
                 ac_hstate, pi = actor_network.apply(
@@ -287,7 +301,6 @@ def make_train(config: MAPPOConfig):
                 obs_v, graph_v, env_state, reward, done, info = jax.vmap(
                     env.step, in_axes=(0, 0, 0)
                 )(rng_step, env_state, env_act)
-                graph_v = batchify_graph(graph_v, env.num_entities)
                 info = jax.tree.map(
                     lambda x: x.reshape(config.derived_values.num_actors), info
                 )
@@ -304,7 +317,7 @@ def make_train(config: MAPPOConfig):
                     ).squeeze(),
                     log_prob.squeeze(),
                     obs_batch,
-                    last_graph,
+                    graph_batch,
                     world_state,
                     info,
                 )
@@ -321,7 +334,7 @@ def make_train(config: MAPPOConfig):
 
             initial_hstates = runner_state[-2]
             runner_state, traj_batch = jax.lax.scan(
-                _env_step, runner_state, None, ppo_config.num_steps_per_update_per_env
+                _env_step, runner_state, None, ppo_config.num_steps_per_update
             )
 
             # CALCULATE ADVANTAGE
@@ -384,12 +397,11 @@ def make_train(config: MAPPOConfig):
                     )
 
                     def _actor_loss_fn(actor_params, init_hstate, traj_batch, gae):
-                        graph_batch = batchify_graph(traj_batch.graph, env.num_entities)
                         # RERUN NETWORK
                         _, pi = actor_network.apply(
                             actor_params,
                             init_hstate.squeeze(),
-                            (traj_batch.obs, graph_batch, traj_batch.done),
+                            (traj_batch.obs, traj_batch.graph, traj_batch.done),
                         )
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -490,7 +502,7 @@ def make_train(config: MAPPOConfig):
                     lambda x: jnp.reshape(x, (1, config.derived_values.num_actors, -1)),
                     init_hstates,
                 )
-                # traj_batch.graph.nodes: Float[Array, "num_steps num_env*num_agent; num_entities, node_feature_dim"]
+                # traj_batch.graph.nodes: Float[Array, "num_steps num_actors; num_entities, node_feature_dim"]
                 # remember last two axis are for one graph
                 batch = (
                     init_hstates[0],
@@ -511,7 +523,7 @@ def make_train(config: MAPPOConfig):
                     lambda x: jnp.swapaxes(
                         jnp.reshape(
                             x,
-                            [x.shape[0], ppo_config.num_minibatches, -1]
+                            [x.shape[0], ppo_config.num_minibatches_actors, -1]
                             + list(x.shape[2:]),
                         ),
                         1,
@@ -562,7 +574,7 @@ def make_train(config: MAPPOConfig):
                         "returns": metric["returned_episode_returns"][-1, :].mean(),
                         "env_step": metric["update_steps"]
                         * config.training_config.num_envs
-                        * ppo_config.num_steps_per_update_per_env,
+                        * ppo_config.num_steps_per_update,
                         **metric["loss"],
                     }
                 )
@@ -611,7 +623,7 @@ def main():
         mode=config.wandb.mode,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
-    with jax.disable_jit(True):
+    with jax.disable_jit(False):
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)

@@ -36,9 +36,9 @@ class MAPPOConfig:
             Attributes:
                 clip_eps: clip_param for PPO to make sure the policy being updated via SGD is close to the policy
                             used in the rollout phase.
-                num_steps_per_update_per_env: number of samples collected from each environment before the model is
+                num_steps_per_update: number of samples collected from each environment before the model is
                                                 updated during the rollout phase. This is batch_size per actor
-                num_minibatches: Number of mini batch in a single batch.
+                num_minibatches_actors: Number of mini batch in a single batch.
                                 mini batch size =  num_steps_per_update_per_env (which is train batch size) / num_minibatches
                 update_epochs: Number of epochs to update the policy per update. One epoch is NUM_MINIBATCHES updates.
             """
@@ -46,8 +46,8 @@ class MAPPOConfig:
             clip_eps = 0.2
             is_clip_eps_per_env = False
             max_grad_norm = 0.5
-            num_steps_per_update_per_env = 128
-            num_minibatches = 4
+            num_steps_per_update = 128
+            num_minibatches_actors = 4
             update_epochs = 4
 
             gae_lambda = 0.95
@@ -102,15 +102,17 @@ class MAPPOConfig:
         env_config = cls.env_config
         train_config = cls.training_config
         num_actors = env_config.kwargs.num_agents * train_config.num_envs
-        batch_size = num_actors * train_config.ppo_config.num_steps_per_update_per_env
+        batch_size = num_actors * train_config.ppo_config.num_steps_per_update
         _derived_values = cls.DerivedValues(
             num_actors=num_actors,
             num_updates_per_env=int(
                 train_config.total_timesteps
                 // train_config.num_envs
-                // train_config.ppo_config.num_steps_per_update_per_env
+                // train_config.ppo_config.num_steps_per_update
             ),
-            minibatch_size=(batch_size // train_config.ppo_config.num_minibatches),
+            minibatch_size=(
+                batch_size // train_config.ppo_config.num_minibatches_actors
+            ),
             scaled_clip_eps=(
                 train_config.ppo_config.clip_eps / env_config.kwargs.num_agents
                 if train_config.ppo_config.is_clip_eps_per_env

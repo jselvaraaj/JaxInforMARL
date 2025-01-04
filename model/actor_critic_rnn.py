@@ -76,6 +76,7 @@ class ActorRNN(nn.Module):
 class GraphMultiHeadAttentionLayer(nn.Module):
     config: MAPPOConfig
 
+    @functools.partial(nn.jit, static_argnames=("avg_multi_head",))
     @nn.compact
     def __call__(self, graph: jraph.GraphsTuple, avg_multi_head):
         # Assumes that given graph is in into jraph compatible format
@@ -146,31 +147,38 @@ class GraphTransformer(nn.Module):
     def __call__(self, graph: jraph.GraphsTuple):
         """Applies a Graph Attention layer."""
 
-        # nodes: Float[Array, "graph_id entity_id features"]
-        # edges: Float[Array, "graph_id edge_id features"]
-        # receivers/senders: Int[Array, "graph_id edge_id"]
-        # n_node/n_edge: Int[Array, "graph_id"]
-        # here graph_id is like batch_id. One different environment/batch has different graphs
-        nodes, edges, receivers, senders, _, _, _ = graph
-        num_graph, n_node, _ = nodes.shape
-        _, n_edge, _ = edges.shape
+        # Make the given graph into jraph compatible format
+        nodes, edges, receivers, senders, _, n_node, n_edge, _ = graph
 
-        # reshape into jraph compatible format
-        nodes = nodes.reshape((num_graph * n_node, -1))
-        edges = edges.reshape((num_graph * n_edge, -1))
-        index_offset = jnp.arange(num_graph)[..., None]
-        receivers = receivers + index_offset * n_node
-        senders = senders + index_offset * n_node
-        receivers = receivers.flatten().astype(jnp.int32)
-        senders = senders.flatten().astype(jnp.int32)
+        num_time_steps, num_actors, num_nodes, node_feature_dim = nodes.shape
+        _, _, num_edges, edge_feature_dim = edges.shape
+        num_graph = num_time_steps * num_actors
+        nodes = nodes.reshape((num_graph * num_nodes, node_feature_dim))
+        edges = edges.reshape((num_graph * num_edges, edge_feature_dim))
 
-        # Embed and extract node features.
+        index_offset = jnp.arange(num_graph).reshape(num_time_steps, num_actors)[
+            ..., None
+        ]
+        receivers += index_offset * num_nodes
+        senders += index_offset * num_nodes
+        receivers = receivers.flatten()
+        senders = senders.flatten()
+        n_node = n_node.flatten()
+        n_edge = n_edge.flatten()
+
+        # Embed entity and compute node features.
         entity_type = nodes[..., -1].astype(jnp.int32)
         entity_emb = nn.Embed(2, self.config.network.embedding_dim)(entity_type)
         nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
 
-        graph = graph._replace(
-            nodes=nodes, edges=edges, receivers=receivers, senders=senders
+        graph = jraph.GraphsTuple(
+            nodes=nodes,
+            edges=edges,
+            receivers=receivers,
+            senders=senders,
+            n_node=n_node,
+            n_edge=n_edge,
+            globals=None,
         )
 
         for _ in range(self.config.network.num_graph_attn_layers - 1):
@@ -180,6 +188,12 @@ class GraphTransformer(nn.Module):
         # Average the multi-head attention for the last layer
         graph = GraphMultiHeadAttentionLayer(self.config)(graph, avg_multi_head=True)
 
+        nodes, edges, receivers, senders, _, n_node, n_edge = graph
+
+        # note the other elements in the graph are still in jraph compatible format
+        # but not reverting it back since won't be using it anymore
+        nodes = nodes.reshape(num_time_steps, num_actors, num_nodes, -1)
+        graph = graph._replace(nodes=nodes)
         return graph
 
 
@@ -192,11 +206,21 @@ class GraphTransformerActorRNN(nn.Module):
 
         obs, graph, dones = x
 
-        # graph_transformer = GraphTransformer(self.config)(graph)
+        agent_indices = graph.agent_indices
 
-        # nodes: Float[Array, "graph_id entity_id features"]
-        # edges: Float[Array, "graph_id edge_id features"]
-        # receivers/senders: Int[Array, "graph_id edge_id"]
+        graph_embedding = GraphTransformer(self.config)(graph)
+        nodes = graph_embedding.nodes
+
+        agent_node_features = graph_embedding.nodes[
+            jnp.arange(nodes.shape[0])[..., None],
+            jnp.arange(nodes.shape[1]),
+            agent_indices,
+        ]
+        obs = jnp.concatenate([obs, agent_node_features], axis=-1)
+
+        # nodes: Float[Array, "node_id features"]
+        # edges: Float[Array, "edge_id features"]
+        # receivers/senders: Int[Array, "edge_id"]
         # n_node/n_edge: Int[Array, "graph_id"]
         # here graph_id is like batch_id. One different environment/batch has different graphs
 

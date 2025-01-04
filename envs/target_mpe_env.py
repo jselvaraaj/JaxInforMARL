@@ -1,10 +1,10 @@
 from functools import partial
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 from flax import struct
 from jaxtyping import Float, Array, Int, Bool
-from jraph import GraphsTuple
 
 from .default_env_config import (
     DISCRETE_ACT,
@@ -50,6 +50,17 @@ class MPEState(MultiAgentState):
         None
     )
     goal: int | None = None
+
+
+class GraphsTupleWithAgentIndex(NamedTuple):
+    nodes: jnp.ndarray | None
+    edges: jnp.ndarray | None
+    receivers: jnp.ndarray | None
+    senders: jnp.ndarray | None
+    globals: jnp.ndarray | None
+    n_node: jnp.ndarray
+    n_edge: jnp.ndarray
+    agent_indices: jnp.ndarray | None
 
 
 class TargetMPEEnvironment(MultiAgentEnv):
@@ -373,7 +384,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         node_features = get_node_feature(self.entity_indices)
         n_node = jnp.array([self.num_entities])
         n_edge = jnp.array([receivers.shape[0]])
-        graph = GraphsTuple(
+        graph = GraphsTupleWithAgentIndex(
             nodes=node_features,
             edges=edge_features,
             globals=None,
@@ -381,6 +392,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             senders=senders,
             n_node=n_node,
             n_edge=n_edge,
+            agent_indices=None,
         )
 
         return graph
