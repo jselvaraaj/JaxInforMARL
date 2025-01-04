@@ -84,6 +84,7 @@ class MAPPOConfig:
         entity = "josssdan"
         project = "JaxInforMARL"
         mode = "disabled"
+        save_model = False
 
     @dataclass
     class DerivedValues:
