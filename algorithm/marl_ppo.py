@@ -7,7 +7,6 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
-import jraph
 import numpy as np
 import optax
 import orbax
@@ -31,7 +30,7 @@ class Transition(NamedTuple):
     reward: jnp.ndarray
     log_prob: jnp.ndarray
     obs: jnp.ndarray
-    graph: jraph.GraphsTuple
+    graph: GraphsTupleWithAgentIndex
     world_state: jnp.ndarray
     info: jnp.ndarray
 
@@ -194,6 +193,7 @@ def make_train(config: MAPPOConfig):
                     env.world_state_size(),
                 )
             ),  #  + env.observation_space(env.agents[0]).shape[0]
+            graph_init,
             jnp.zeros((1, num_actors)),
         )
         cr_init_hstate = ScannedRNN.initialize_carry(
@@ -269,9 +269,12 @@ def make_train(config: MAPPOConfig):
                 graph_batch = batchify_graph(
                     last_graph, config.training_config.num_envs, env.num_agents
                 )
+                graph_network_input = jax.tree.map(
+                    lambda x: x[jnp.newaxis, ...], graph_batch
+                )
                 ac_in = (
                     obs_batch[jnp.newaxis, :],
-                    jax.tree.map(lambda x: x[jnp.newaxis, ...], graph_batch),
+                    graph_network_input,
                     last_done[jnp.newaxis, :],
                 )
                 ac_hstate, pi = actor_network.apply(
@@ -289,6 +292,7 @@ def make_train(config: MAPPOConfig):
                 )
                 cr_in = (
                     world_state[None, :],
+                    graph_network_input,
                     last_done[jnp.newaxis, :],
                 )
                 cr_hstate, value = critic_network.apply(
@@ -346,8 +350,13 @@ def make_train(config: MAPPOConfig):
             last_world_state = last_world_state.reshape(
                 (config.derived_values.num_actors, -1)
             )
+            graph_batch = batchify_graph(
+                last_graph, config.training_config.num_envs, env.num_agents
+            )
+            graph_network_input = jax.tree.map(lambda x: x[None, ...], graph_batch)
             cr_in = (
                 last_world_state[None, :],
+                graph_network_input,
                 last_done[np.newaxis, :],
             )
             _, last_val = critic_network.apply(
@@ -444,7 +453,7 @@ def make_train(config: MAPPOConfig):
                         _, value = critic_network.apply(
                             critic_params,
                             init_hstate.squeeze(),
-                            (traj_batch.world_state, traj_batch.done),
+                            (traj_batch.world_state, traj_batch.graph, traj_batch.done),
                         )
 
                         # CALCULATE VALUE LOSS

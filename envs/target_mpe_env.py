@@ -1,5 +1,4 @@
 from functools import partial
-from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -36,6 +35,7 @@ from .schema import (
     MultiAgentDone,
     Info,
     MultiAgentGraph,
+    GraphsTupleWithAgentIndex,
 )
 from .spaces import Discrete, Box
 
@@ -50,17 +50,6 @@ class MPEState(MultiAgentState):
         None
     )
     goal: int | None = None
-
-
-class GraphsTupleWithAgentIndex(NamedTuple):
-    nodes: jnp.ndarray | None
-    edges: jnp.ndarray | None
-    receivers: jnp.ndarray | None
-    senders: jnp.ndarray | None
-    globals: jnp.ndarray | None
-    n_node: jnp.ndarray
-    n_edge: jnp.ndarray
-    agent_indices: jnp.ndarray | None
 
 
 class TargetMPEEnvironment(MultiAgentEnv):

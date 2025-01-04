@@ -235,7 +235,18 @@ class CriticRNN(nn.Module):
 
     @nn.compact
     def __call__(self, hidden, x):
-        world_state, dones = x
+        _w_s, graph, dones = x
+        nodes = graph.nodes
+
+        # Embed entity.
+        entity_type = nodes[..., -1].astype(jnp.int32)
+        entity_emb = nn.Embed(2, self.config.network.embedding_dim)(entity_type)
+        nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+
+        world_state = jnp.sum(
+            nodes, axis=2
+        )  # Aggregate all node features for a given actor and time step
+
         embedding = nn.Dense(
             self.config.network.fc_dim_size,
             kernel_init=orthogonal(jnp.sqrt(2)),
