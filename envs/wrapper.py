@@ -61,6 +61,10 @@ class MARLWrapper(MultiAgentEnv):
     def num_entities(self):
         return self._env.num_entities
 
+    @property
+    def node_feature_dim(self):
+        return self._env.node_feature_dim
+
 
 class MPEWorldStateWrapper(MARLWrapper):
 

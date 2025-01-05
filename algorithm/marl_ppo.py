@@ -3,8 +3,9 @@ Built off JaxMARL mappo_rnn_mpe.py
 """
 
 import os
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
+import distrax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -14,9 +15,10 @@ import wandb
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from jax import block_until_ready
+from jaxtyping import Array
 
 import envs
-from config.mappo_config import MAPPOConfig as MAPPOConfig
+from config.mappo_config import MAPPOConfig as MAPPOConfig, config_to_dict
 from envs.target_mpe_env import GraphsTupleWithAgentIndex
 from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper
 from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphTransformerActorRNN
@@ -82,14 +84,86 @@ def batchify_graph(graph: GraphsTupleWithAgentIndex, num_env, num_agents: int):
 
 
 def make_env_from_config(config: MAPPOConfig):
-    env_class_name = config.env_config.cls_name
+    env_class_name = config.env_config.env_cls_name
     env_class = getattr(envs, env_class_name)
-    env_kwargs = config.env_config.kwargs.to_dict() | {
-        "node_feature_dim": config.network.node_feature_dim
-    }
+    env_kwargs = config_to_dict(config.env_config.kwargs)
     env = MPEWorldStateWrapper(env_class(**env_kwargs))
     env = MPELogWrapper(env)
     return env
+
+
+def get_actor_init_input(config: MAPPOConfig, env):
+    num_env = config.training_config.num_envs
+    nodes = jnp.zeros(
+        (
+            num_env,
+            env.num_entities,
+            env.node_feature_dim,
+        )
+    )
+    nodes = nodes.at[..., -1].set(1)  # entity type
+
+    edges = jnp.arange(num_env * 2 * env.num_agents).reshape(
+        num_env,
+        2 * env.num_agents,
+        1,
+    )
+    sender_receiver_shape = (
+        num_env,
+        2 * env.num_agents,
+    )
+    receivers = jnp.broadcast_to(
+        jnp.concatenate(
+            [
+                jnp.arange(env.num_agents),
+                jnp.arange(env.num_agents),
+            ]
+        ),
+        sender_receiver_shape,
+    )
+    senders = jnp.broadcast_to(
+        jnp.concatenate(
+            [
+                jnp.arange(env.num_agents),
+                jnp.flip(jnp.arange(env.num_agents)),
+            ]
+        ),
+        sender_receiver_shape,
+    )
+    n_node = jnp.array(num_env * [env.num_entities])
+    n_edge = jnp.array(num_env * [2 * env.num_agents])
+    graph_init = batchify_graph(
+        GraphsTupleWithAgentIndex(
+            nodes=nodes,
+            edges=edges,
+            globals=None,
+            receivers=receivers,
+            senders=senders,
+            n_node=n_node,
+            n_edge=n_edge,
+            agent_indices=None,
+        ),
+        config.training_config.num_envs,
+        env.num_agents,
+    )
+    graph_init = jax.tree.map(lambda x: x[jnp.newaxis, ...], graph_init)
+    num_actors = config.derived_values.num_actors
+    ac_init_x = (
+        jnp.zeros(
+            (
+                1,
+                num_actors,
+                env.observation_space_for_agent(env.agent_labels[0]).shape[0],
+            )
+        ),
+        graph_init,
+        jnp.zeros((1, num_actors)),
+    )
+    ac_init_h_state = ScannedRNN.initialize_carry(
+        num_actors, config.network.gru_hidden_dim
+    )
+
+    return ac_init_x, ac_init_h_state, graph_init
 
 
 def make_train(config: MAPPOConfig):
@@ -98,6 +172,7 @@ def make_train(config: MAPPOConfig):
     ppo_config = config.training_config.ppo_config
 
     def linear_schedule(count):
+        nonlocal config, ppo_config
         frac = (
             1.0
             - (count // (ppo_config.num_minibatches_actors * ppo_config.update_epochs))
@@ -112,78 +187,28 @@ def make_train(config: MAPPOConfig):
         actor_network = GraphTransformerActorRNN(
             env.action_space_for_agent(env.agent_labels[0]).n, config=config
         )
+
+        def actor_apply_cast(result):
+            return cast(
+                tuple[Array, distrax.Categorical],
+                result,
+            )
+
         critic_network = CriticRNN(config=config)
+
+        def critic_apply_cast(result):
+            return cast(
+                tuple[Array, Array],
+                result,
+            )
+
         rng, _rng_actor, _rng_critic = jax.random.split(rng, 3)
 
-        nodes = jnp.zeros(
-            (
-                num_env,
-                env.num_entities,
-                config.network.node_feature_dim,
-            )
-        )
-        nodes = nodes.at[..., -1].set(1)  # entity type
-
-        edges = jnp.arange(num_env * 2 * env.num_agents).reshape(
-            num_env,
-            2 * env.num_agents,
-            1,
-        )
-        sender_receiver_shape = (
-            num_env,
-            2 * env.num_agents,
-        )
-        receivers = jnp.broadcast_to(
-            jnp.concatenate(
-                [
-                    jnp.arange(env.num_agents),
-                    jnp.arange(env.num_agents),
-                ]
-            ),
-            sender_receiver_shape,
-        )
-        senders = jnp.broadcast_to(
-            jnp.concatenate(
-                [
-                    jnp.arange(env.num_agents),
-                    jnp.flip(jnp.arange(env.num_agents)),
-                ]
-            ),
-            sender_receiver_shape,
-        )
-        n_node = jnp.array(num_env * [env.num_entities])
-        n_edge = jnp.array(num_env * [2 * env.num_agents])
-        graph_init = batchify_graph(
-            GraphsTupleWithAgentIndex(
-                nodes=nodes,
-                edges=edges,
-                globals=None,
-                receivers=receivers,
-                senders=senders,
-                n_node=n_node,
-                n_edge=n_edge,
-                agent_indices=None,
-            ),
-            config.training_config.num_envs,
-            env.num_agents,
-        )
-        graph_init = jax.tree.map(lambda x: x[jnp.newaxis, ...], graph_init)
         num_actors = config.derived_values.num_actors
-        ac_init_x = (
-            jnp.zeros(
-                (
-                    1,
-                    num_actors,
-                    env.observation_space_for_agent(env.agent_labels[0]).shape[0],
-                )
-            ),
-            graph_init,
-            jnp.zeros((1, num_actors)),
+        ac_init_x, ac_init_h_state, graph_init = get_actor_init_input(config, env)
+        actor_network_params = actor_network.init(
+            _rng_actor, ac_init_h_state, ac_init_x
         )
-        ac_init_hstate = ScannedRNN.initialize_carry(
-            num_actors, config.network.gru_hidden_dim
-        )
-        actor_network_params = actor_network.init(_rng_actor, ac_init_hstate, ac_init_x)
 
         cr_init_x = (
             jnp.zeros(
@@ -192,15 +217,15 @@ def make_train(config: MAPPOConfig):
                     num_actors,
                     env.world_state_size(),
                 )
-            ),  #  + env.observation_space(env.agents[0]).shape[0]
+            ),
             graph_init,
             jnp.zeros((1, num_actors)),
         )
-        cr_init_hstate = ScannedRNN.initialize_carry(
+        cr_init_h_state = ScannedRNN.initialize_carry(
             num_actors, config.network.gru_hidden_dim
         )
         critic_network_params = critic_network.init(
-            _rng_critic, cr_init_hstate, cr_init_x
+            _rng_critic, cr_init_h_state, cr_init_x
         )
 
         max_grad_norm = ppo_config.max_grad_norm
@@ -238,26 +263,29 @@ def make_train(config: MAPPOConfig):
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, num_env)
         obs_v, graph_v, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
-        ac_init_hstate = ScannedRNN.initialize_carry(
+        ac_init_h_state = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
-        cr_init_hstate = ScannedRNN.initialize_carry(
+        cr_init_h_state = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
 
         # TRAIN LOOP
         def _update_step(update_runner_state, unused):
+            nonlocal env, config, ppo_config, actor_network, critic_network
             # COLLECT TRAJECTORIES
             runner_state, update_steps = update_runner_state
 
             def _env_step(runner_state, unused):
+                nonlocal env, config, actor_network
+
                 (
                     train_states,
                     env_state,
                     last_obs,
                     last_graph,
                     last_done,
-                    hstates,
+                    h_states,
                     rng,
                 ) = runner_state
 
@@ -277,8 +305,8 @@ def make_train(config: MAPPOConfig):
                     graph_network_input,
                     last_done[jnp.newaxis, :],
                 )
-                ac_hstate, pi = actor_network.apply(
-                    train_states[0].params, hstates[0], ac_in
+                ac_h_state, pi = actor_apply_cast(
+                    actor_network.apply(train_states[0].params, h_states[0], ac_in)
                 )
                 action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(action)
@@ -295,8 +323,8 @@ def make_train(config: MAPPOConfig):
                     graph_network_input,
                     last_done[jnp.newaxis, :],
                 )
-                cr_hstate, value = critic_network.apply(
-                    train_states[1].params, hstates[1], cr_in
+                cr_h_state, value = critic_apply_cast(
+                    critic_network.apply(train_states[1].params, h_states[1], cr_in)
                 )
 
                 # STEP ENV
@@ -331,18 +359,18 @@ def make_train(config: MAPPOConfig):
                     obs_v,
                     graph_v,
                     done_batch,
-                    (ac_hstate, cr_hstate),
+                    (ac_h_state, cr_h_state),
                     rng,
                 )
                 return runner_state, transition
 
-            initial_hstates = runner_state[-2]
+            initial_h_states = runner_state[-2]
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, ppo_config.num_steps_per_update
             )
 
             # CALCULATE ADVANTAGE
-            train_states, env_state, last_obs, last_graph, last_done, hstates, rng = (
+            train_states, env_state, last_obs, last_graph, last_done, h_states, rng = (
                 runner_state
             )
 
@@ -359,13 +387,14 @@ def make_train(config: MAPPOConfig):
                 graph_network_input,
                 last_done[np.newaxis, :],
             )
-            _, last_val = critic_network.apply(
-                train_states[1].params, hstates[1], cr_in
+            _, last_val = critic_apply_cast(
+                critic_network.apply(train_states[1].params, h_states[1], cr_in)
             )
             last_val = last_val.squeeze()
 
             def _calculate_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
+                    nonlocal config, ppo_config
                     gae, next_value = gae_and_next_value
                     done, value, reward = (
                         transition.global_done,
@@ -399,24 +428,33 @@ def make_train(config: MAPPOConfig):
 
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
+                nonlocal config, ppo_config
+
                 def _update_minbatch(train_states, batch_info):
                     actor_train_state, critic_train_state = train_states
-                    ac_init_hstate, cr_init_hstate, traj_batch, advantages, targets = (
-                        batch_info
-                    )
+                    (
+                        ac_init_h_state,
+                        cr_init_h_state,
+                        traj_batch,
+                        advantages,
+                        targets,
+                    ) = batch_info
 
-                    def _actor_loss_fn(actor_params, init_hstate, traj_batch, gae):
+                    def _actor_loss_fn(actor_params, init_h_state, traj_batch, gae):
+                        nonlocal ppo_config, actor_network
                         # RERUN NETWORK
-                        _, pi = actor_network.apply(
-                            actor_params,
-                            init_hstate.squeeze(),
-                            (traj_batch.obs, traj_batch.graph, traj_batch.done),
+                        _, pi = actor_apply_cast(
+                            actor_network.apply(
+                                actor_params,
+                                init_h_state.squeeze(),
+                                (traj_batch.obs, traj_batch.graph, traj_batch.done),
+                            )
                         )
                         log_prob = pi.log_prob(traj_batch.action)
 
                         # CALCULATE ACTOR LOSS
-                        logratio = log_prob - traj_batch.log_prob
-                        ratio = jnp.exp(logratio)
+                        log_ratio = log_prob - traj_batch.log_prob
+                        ratio = jnp.exp(log_ratio)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -432,7 +470,7 @@ def make_train(config: MAPPOConfig):
                         entropy = pi.entropy().mean()
 
                         # debug
-                        approx_kl = ((ratio - 1) - logratio).mean()
+                        approx_kl = ((ratio - 1) - log_ratio).mean()
                         clip_frac = jnp.mean(jnp.abs(ratio - 1) > ppo_config.clip_eps)
 
                         actor_loss = (
@@ -447,13 +485,20 @@ def make_train(config: MAPPOConfig):
                         )
 
                     def _critic_loss_fn(
-                        critic_params, init_hstate, traj_batch, targets
+                        critic_params, init_h_state, traj_batch, targets
                     ):
+                        nonlocal critic_train_state, ppo_config, critic_network
                         # RERUN NETWORK
-                        _, value = critic_network.apply(
-                            critic_params,
-                            init_hstate.squeeze(),
-                            (traj_batch.world_state, traj_batch.graph, traj_batch.done),
+                        _, value = critic_apply_cast(
+                            critic_network.apply(
+                                critic_params,
+                                init_h_state.squeeze(),
+                                (
+                                    traj_batch.world_state,
+                                    traj_batch.graph,
+                                    traj_batch.done,
+                                ),
+                            )
                         )
 
                         # CALCULATE VALUE LOSS
@@ -470,11 +515,14 @@ def make_train(config: MAPPOConfig):
 
                     actor_grad_fn = jax.value_and_grad(_actor_loss_fn, has_aux=True)
                     actor_loss, actor_grads = actor_grad_fn(
-                        actor_train_state.params, ac_init_hstate, traj_batch, advantages
+                        actor_train_state.params,
+                        ac_init_h_state,
+                        traj_batch,
+                        advantages,
                     )
                     critic_grad_fn = jax.value_and_grad(_critic_loss_fn, has_aux=True)
                     critic_loss, critic_grads = critic_grad_fn(
-                        critic_train_state.params, cr_init_hstate, traj_batch, targets
+                        critic_train_state.params, cr_init_h_state, traj_batch, targets
                     )
 
                     actor_train_state = actor_train_state.apply_gradients(
@@ -499,7 +547,7 @@ def make_train(config: MAPPOConfig):
 
                 (
                     train_states,
-                    init_hstates,
+                    init_h_states,
                     traj_batch,
                     advantages,
                     targets,
@@ -507,15 +555,15 @@ def make_train(config: MAPPOConfig):
                 ) = update_state
                 rng, _rng = jax.random.split(rng)
 
-                init_hstates = jax.tree.map(
+                init_h_states = jax.tree.map(
                     lambda x: jnp.reshape(x, (1, config.derived_values.num_actors, -1)),
-                    init_hstates,
+                    init_h_states,
                 )
                 # traj_batch.graph.nodes: Float[Array, "num_steps num_actors; num_entities, node_feature_dim"]
                 # remember last two axis are for one graph
                 batch = (
-                    init_hstates[0],
-                    init_hstates[1],
+                    init_h_states[0],
+                    init_h_states[1],
                     traj_batch,
                     advantages.squeeze(),
                     targets.squeeze(),
@@ -546,7 +594,7 @@ def make_train(config: MAPPOConfig):
                 )
                 update_state = (
                     train_states,
-                    jax.tree.map(lambda x: x.squeeze(), init_hstates),
+                    jax.tree.map(lambda x: x.squeeze(), init_h_states),
                     traj_batch,
                     advantages,
                     targets,
@@ -556,7 +604,7 @@ def make_train(config: MAPPOConfig):
 
             update_state = (
                 train_states,
-                initial_hstates,
+                initial_h_states,
                 traj_batch,
                 advantages,
                 targets,
@@ -578,7 +626,8 @@ def make_train(config: MAPPOConfig):
                 progress = metric["update_steps"] / config.derived_values.num_updates
                 if (
                     config.wandb.save_model
-                    and metric["update_steps"] % config.wandb.save_every_update_steps
+                    and metric["update_steps"]
+                    % config.wandb.checkpoint_model_every_update_steps
                     == 0
                 ):
                     model_artifact = wandb.Artifact(
@@ -618,7 +667,7 @@ def make_train(config: MAPPOConfig):
                 last_obs,
                 last_graph,
                 last_done,
-                hstates,
+                h_states,
                 rng,
             )
             return (runner_state, update_steps), metric
@@ -630,7 +679,7 @@ def make_train(config: MAPPOConfig):
             obs_v,
             graph_v,
             jnp.zeros(config.derived_values.num_actors, dtype=bool),
-            (ac_init_hstate, cr_init_hstate),
+            (ac_init_h_state, cr_init_h_state),
             _rng,
         )
         runner_state, metric = jax.lax.scan(
@@ -647,10 +696,15 @@ def make_train(config: MAPPOConfig):
 def main():
 
     config: MAPPOConfig = MAPPOConfig.create()
+    assert (
+        config.TrainingConfig.num_envs > 1
+    ), "Number of environments must be greater than 1 for training"
+    dict_config = config_to_dict(config)
     wandb.init(
         entity=config.wandb.entity,
         project=config.wandb.project,
         mode=config.wandb.mode,
+        config=dict_config,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
     with jax.disable_jit(False):

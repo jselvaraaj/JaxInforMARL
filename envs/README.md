@@ -9,3 +9,5 @@ Annotated function types for jax transformed functions correspond to function ty
 Leading axis in an JAX array of single step is always the entity index.
 Agent indices are always [0, num_agents-1]
 Agent indices are prefix array of entity indices array.
+
+

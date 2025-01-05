@@ -1,5 +1,8 @@
 import wandb
 
+# Change me
+artifact_name = "josssdan/JaxInforMARL/PPO_RNN_Runner_State:v49"
+
 api = wandb.Api()
-artifact = api.artifact("josssdan/JaxInforMARL/PPO_RNN_Runner_State:v2", type="model")
-artifact_dir = artifact.download()
+artifact = api.artifact(artifact_name, type="model")
+artifact_dir = artifact.download()  # 33

@@ -2,44 +2,37 @@ from __future__ import annotations
 
 from beartype import beartype
 from flax import struct
-from flax.struct import dataclass
 
 
 @beartype
-@dataclass
-class MAPPOConfig:
-    @dataclass
-    class EnvConfig:
-        @dataclass
-        class EnvKwArgs:
+class MAPPOConfig(struct.PyTreeNode):
+    class EnvConfig(struct.PyTreeNode):
+        class EnvKwArgs(struct.PyTreeNode):
             """
             Attributes:
                 num_agents: Number of agents in a single environment.
                 max_steps: Rollout length in a single environment.
+                agent_max_speed: Negative value means no maximum speed.
             """
 
             num_agents = 4
             max_steps = 25
+            dist_to_goal_reward_ratio = 0.5
+            agent_visibility_radius = 0.5
+            agent_max_speed = 1
 
-            def to_dict(self):
-                dict_repr = {"num_agents": self.num_agents, "max_steps": self.max_steps}
-                return dict_repr
-
-        cls_name = "TargetMPEEnvironment"
+        env_cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()
 
-    @dataclass
-    class TrainingConfig:
-        @dataclass
-        class PPOConfig:
+    class TrainingConfig(struct.PyTreeNode):
+        class PPOConfig(struct.PyTreeNode):
             """
             Attributes:
                 clip_eps: clip_param for PPO to make sure the policy being updated via SGD is close to the policy
                             used in the rollout phase.
-                num_steps_per_update: number of samples collected from each environment before the model is
-                                                updated during the rollout phase. This is batch_size per actor
-                num_minibatches_actors: Number of mini batch in a single batch.
-                                mini batch size =  num_steps_per_update_per_env (which is train batch size) / num_minibatches
+                num_steps_per_update: number of samples collected from all environment during the rollout phase
+                                    before the model is updated . This is batch_size per actor
+                num_minibatches_actors: Number of actors to use in one epoch.
                 update_epochs: Number of epochs to update the policy per update. One epoch is NUM_MINIBATCHES updates.
             """
 
@@ -56,7 +49,7 @@ class MAPPOConfig:
 
         """
         Attributes:
-            total_timesteps: Total time steps across all parallel environments.
+            total_timesteps: Total env time steps to collect. This will be distributed across num_envs environments.
             gamma: discount factor.
         """
 
@@ -64,31 +57,27 @@ class MAPPOConfig:
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
+        num_envs = 3
         gamma = 0.99
         total_timesteps = 1e4
         ppo_config = PPOConfig()
 
-    @dataclass
-    class NetworkConfig:
+    class NetworkConfig(struct.PyTreeNode):
         fc_dim_size = 128
         gru_hidden_dim = 128
-        node_feature_dim = 7
         embedding_dim = 4
         num_graph_attn_layers = 2
         graph_fc_dim_size = 16
         num_heads_per_attn_layer = 3
 
-    @dataclass
-    class WandbConfig:
+    class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"
         project = "JaxInforMARL"
         mode = "disabled"
         save_model = False
-        save_every_update_steps = 1e2
+        checkpoint_model_every_update_steps = 1e2
 
-    @dataclass
-    class DerivedValues:
+    class DerivedValues(struct.PyTreeNode):
         num_actors: int
         num_updates: int
         minibatch_size: int
@@ -129,4 +118,18 @@ class MAPPOConfig:
         #     batch_size % _derived_values.minibatch_size == 0
         # ), f"Minibatch size {_derived_values.minibatch_size} must divide batch size {batch_size}."
 
-        return cls(derived_values=_derived_values)  # type: ignore
+        return cls(derived_values=_derived_values)
+
+
+def config_to_dict(config):
+    is_primitive_type = lambda obj: isinstance(obj, (int, float, str, bool, type(None)))
+    return {
+        attr: (
+            getattr(config, attr)
+            if is_primitive_type(getattr(config, attr))
+            else config_to_dict(getattr(config, attr))
+        )
+        for attr in dir(config)
+        if not callable(getattr(config, attr))
+        and not (attr.startswith("__") or attr.startswith("_"))
+    }

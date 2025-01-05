@@ -68,13 +68,13 @@ class TargetMPEEnvironment(MultiAgentEnv):
         action_spaces: dict[AgentLabel, Discrete | Box] = None,
         observation_spaces: dict[AgentLabel, Discrete | Box] = None,
         color: RGB = None,
-        neighborhood_radius: None | Float[Array, f"{AgentIndex}"] = None,
-        node_feature_dim: int = 7,
         # communication_message_dim: int = 0,
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
         dt: float = DT,
-        local_ratio=0.5,
+        dist_to_goal_reward_ratio=0.5,
+        agent_visibility_radius: int = 0.5,
+        agent_max_speed: int = 1,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -92,6 +92,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         self.agent_entity_type = 0
         self.landmark_entity_type = 1
+
+        self.node_feature_dim = 7
 
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]
@@ -128,17 +130,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
         )
 
         assert (
-            neighborhood_radius is None or neighborhood_radius.shape[0] == num_agents
+            agent_visibility_radius >= 0
         ), "neighborhood_radius must be provided for each agent"
-        self.neighborhood_radius = default(
-            neighborhood_radius, jnp.full(num_agents, 0.5)
-        )
+        self.neighborhood_radius = jnp.full(num_agents, agent_visibility_radius)
 
-        assert 0.0 <= local_ratio <= 1.0, "local_ratio must be between 0.0 and 1.0"
-        self.local_ratio = local_ratio
-
-        assert node_feature_dim > 0, "node_feature_dim must be 0"
-        self.node_feature_dim = node_feature_dim
+        assert (
+            0.0 <= dist_to_goal_reward_ratio <= 1.0
+        ), "local_ratio must be between 0.0 and 1.0"
+        self.dist_to_goal_reward_ratio = dist_to_goal_reward_ratio
 
         # self.communication_message_dim = communication_message_dim
         self.position_dim = position_dim
@@ -164,8 +163,12 @@ class TargetMPEEnvironment(MultiAgentEnv):
         )
         self.entity_mass = jnp.full(self.num_entities, 1.0)
         self.entity_acceleration = jnp.full(self.num_agents, 5.0)
+
         self.entity_max_speed = jnp.concatenate(
-            [jnp.full(self.num_agents, -1), jnp.full(self.num_landmarks, 0.0)]
+            [
+                jnp.full(self.num_agents, agent_max_speed),
+                jnp.full(self.num_landmarks, 0.0),
+            ]
         )
         self.agent_control_noise = jnp.full(self.num_agents, 0)
         # self.communication_noise = self.velocity_noise = jnp.concatenate(
@@ -613,8 +616,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
         global_agent_collision_rew = -jnp.sum(agent_agent_collision)
 
         global_reward = (
-            self.local_ratio * global_dist_rew
-            + (1 - self.local_ratio) * global_agent_collision_rew
+            self.dist_to_goal_reward_ratio * global_dist_rew
+            + (1 - self.dist_to_goal_reward_ratio) * global_agent_collision_rew
         )
 
         return {

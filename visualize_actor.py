@@ -4,101 +4,36 @@ import jax
 import jax.numpy as jnp
 import orbax
 
-from algorithm.marl_ppo import make_env_from_config, batchify_graph
+from algorithm.marl_ppo import (
+    make_env_from_config,
+    batchify_graph,
+    get_actor_init_input,
+)
 from config.mappo_config import MAPPOConfig
-from envs import TargetMPEEnvironment
 from envs.mpe_visualizer import MPEVisualizer
-from envs.schema import GraphsTupleWithAgentIndex
-from model.actor_critic_rnn import ScannedRNN, GraphTransformerActorRNN
+from model.actor_critic_rnn import GraphTransformerActorRNN
 
 
-def get_restored_actor():
+def get_restored_actor(artifact_name):
     config: MAPPOConfig = MAPPOConfig.create()
+    assert (
+        config.TrainingConfig.num_envs == 1
+    ), "Number of environments must be equal 1 for Visualizing in the config"
     env = make_env_from_config(config)
     rng = jax.random.PRNGKey(config.training_config.seed)
 
     rng, _rng_actor = jax.random.split(rng, 2)
 
-    num_agents = config.env_config.kwargs.num_agents
     num_actions = env.action_space_for_agent(env.agent_labels[0]).n
-    obs_dim = env.observation_space_for_agent(env.agent_labels[0]).shape[0]
-    num_env = config.training_config.num_envs
-    actor_network = GraphTransformerActorRNN(num_actions, config=config)
-    nodes = jnp.zeros(
-        (
-            num_env,
-            env.num_entities,
-            config.network.node_feature_dim,
-        )
-    )
-    nodes = nodes.at[..., -1].set(1)  # entity type
 
-    edges = jnp.arange(num_env * 2 * env.num_agents).reshape(
-        num_env,
-        2 * env.num_agents,
-        1,
-    )
-    sender_receiver_shape = (
-        num_env,
-        2 * env.num_agents,
-    )
-    receivers = jnp.broadcast_to(
-        jnp.concatenate(
-            [
-                jnp.arange(env.num_agents),
-                jnp.arange(env.num_agents),
-            ]
-        ),
-        sender_receiver_shape,
-    )
-    senders = jnp.broadcast_to(
-        jnp.concatenate(
-            [
-                jnp.arange(env.num_agents),
-                jnp.flip(jnp.arange(env.num_agents)),
-            ]
-        ),
-        sender_receiver_shape,
-    )
-    n_node = jnp.array(num_env * [env.num_entities])
-    n_edge = jnp.array(num_env * [2 * env.num_agents])
-    graph_init = batchify_graph(
-        GraphsTupleWithAgentIndex(
-            nodes=nodes,
-            edges=edges,
-            globals=None,
-            receivers=receivers,
-            senders=senders,
-            n_node=n_node,
-            n_edge=n_edge,
-            agent_indices=None,
-        ),
-        config.training_config.num_envs,
-        env.num_agents,
-    )
-    graph_init = jax.tree.map(lambda x: x[jnp.newaxis, ...], graph_init)
-    num_actors = config.derived_values.num_actors
-    ac_init_x = (
-        jnp.zeros(
-            (
-                1,
-                num_actors,
-                env.observation_space_for_agent(env.agent_labels[0]).shape[0],
-            )
-        ),
-        graph_init,
-        jnp.zeros((1, num_actors)),
-    )
-    ac_init_hstate = ScannedRNN.initialize_carry(
-        num_actors, config.network.gru_hidden_dim
-    )
+    actor_network = GraphTransformerActorRNN(num_actions, config=config)
+
+    ac_init_x, ac_init_hstate, graph_init = get_actor_init_input(config, env)
 
     actor_network_params = actor_network.init(_rng_actor, ac_init_hstate, ac_init_x)
 
     running_script_path = os.path.abspath(".")
-    checkpoint_dir = os.path.join(
-        running_script_path, "artifacts/PPO_RNN_Runner_State:v2"
-    )
+    checkpoint_dir = os.path.join(running_script_path, artifact_name)
 
     sharding = jax.sharding.NamedSharding(
         jax.sharding.Mesh(jax.devices(), ("model",)),
@@ -126,19 +61,22 @@ def get_restored_actor():
 
     restored_actor_params = raw_restored["actor_train_params"]
 
-    return config, actor_network, restored_actor_params, ac_init_hstate
+    return config, actor_network, restored_actor_params, ac_init_hstate, env
 
 
 if __name__ == "__main__":
-    config, actor, restored_params, actor_init_hidden_state = get_restored_actor()
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v33"
+    config, actor, restored_params, actor_init_hidden_state, env = get_restored_actor(
+        artifact_name
+    )
 
     max_steps = config.env_config.kwargs.max_steps
     key = jax.random.PRNGKey(0)
     key, key_r = jax.random.split(key, 2)
 
     num_agents = config.env_config.kwargs.num_agents
+    env = env._env._env
 
-    env = TargetMPEEnvironment(num_agents=num_agents)
     obs, graph, state = env.reset(key_r)
 
     hidden_state = actor_init_hidden_state
