@@ -646,7 +646,7 @@ def make_train(config: MAPPOConfig):
                     running_script_path = os.path.abspath(".")
                     checkpoint_dir = os.path.join(
                         running_script_path,
-                        f"saved_actor/PPO_Runner_Checkpoint_{progress}",
+                        f"saved_actor/{wandb.run.name}/PPO_Runner_Checkpoint_{progress}",
                     )
                     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
                     save_args = orbax_utils.save_args_from_target(out)
@@ -726,7 +726,10 @@ def main():
     if config.wandb.save_model:
         model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
         running_script_path = os.path.abspath(".")
-        checkpoint_dir = os.path.join(running_script_path, "PPO_Runner_Checkpoint")
+        checkpoint_dir = os.path.join(
+            running_script_path,
+            f"saved_actor/{wandb.run.name}/PPO_Runner_Checkpoint_final",
+        )
         orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
         save_args = orbax_utils.save_args_from_target(out)
         orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
