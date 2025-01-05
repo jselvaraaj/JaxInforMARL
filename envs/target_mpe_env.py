@@ -74,7 +74,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
         dt: float = DT,
-        local_ratio=0.1,
+        local_ratio=0.25,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -131,7 +131,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             neighborhood_radius is None or neighborhood_radius.shape[0] == num_agents
         ), "neighborhood_radius must be provided for each agent"
         self.neighborhood_radius = default(
-            neighborhood_radius, jnp.full(num_agents, 1.0)
+            neighborhood_radius, jnp.full(num_agents, 0.30)
         )
 
         assert 0.0 <= local_ratio <= 1.0, "local_ratio must be between 0.0 and 1.0"
@@ -610,7 +610,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         dist_reward = _dist_between_target_reward(self.agent_indices, state)
 
         global_dist_rew = jnp.sum(dist_reward)
-        global_agent_collision_rew = -10 * jnp.sum(agent_agent_collision)
+        global_agent_collision_rew = -jnp.sum(agent_agent_collision)
 
         global_reward = (
             self.local_ratio * global_dist_rew
