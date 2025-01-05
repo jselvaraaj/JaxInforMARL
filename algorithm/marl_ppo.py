@@ -1,5 +1,5 @@
 """
-Built off JaxMARL mappo_rnn_mpe.py
+Built off JaxMARL( https://github.com/FLAIROx/JaxMARL) baselines/MAPPO/mappo_rnn_mpe.py
 """
 
 import os
@@ -624,10 +624,10 @@ def make_train(config: MAPPOConfig):
             def callback(metric):
                 out = metric["out"]
                 progress = metric["update_steps"] / config.derived_values.num_updates
+                update_steps = metric["update_steps"]
                 if (
                     config.wandb.save_model
-                    and metric["update_steps"]
-                    % config.wandb.checkpoint_model_every_update_steps
+                    and update_steps % config.wandb.checkpoint_model_every_update_steps
                     == 0
                 ):
                     model_artifact = wandb.Artifact(
@@ -643,14 +643,11 @@ def make_train(config: MAPPOConfig):
                     orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
                     model_artifact.add_dir(checkpoint_dir)
                     wandb.log_artifact(model_artifact)
-                print(
-                    "progress: ",
-                    progress,
-                )
+                print(f"progress: {progress}; update step: {update_steps}")
                 wandb.log(
                     {
                         "returns": metric["returned_episode_returns"][-1, :].mean(),
-                        "env_step": metric["update_steps"]
+                        "env_step": update_steps
                         * config.training_config.num_envs
                         * ppo_config.num_steps_per_update,
                         **metric["loss"],

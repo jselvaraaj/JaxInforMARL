@@ -13,7 +13,8 @@
 # Typical train and test flow:
 
 1. Run the `train_with_gpu.ipynb` notebook in a colab with gpu.
-    - Remember to set up the config in `WandbConfig` in `config/mappo_config.py`
+    - Remember to set up the config in `WandbConfig` in `config/mappo_config.py` and change mode `online` to get wandb
+      logging.
     - The artifacts are saved under the name "PPO_RNN_Runner_State"
 2. Find the latest artifact name in wandb and download the artifact in local machine with `download_artifacts.py`
 3. Visualize the actor with `visualize_actor.py` after changing the `artifact_name` variable in the block.
