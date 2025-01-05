@@ -65,7 +65,7 @@ def get_restored_actor(artifact_name):
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v63"
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v100"
     config, actor, restored_params, actor_init_hidden_state, env = get_restored_actor(
         artifact_name
     )
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         dones = state.dones[None, ...]
 
         graph = jax.tree.map(lambda x: x[None, ...], graph)
-        graph = batchify_graph(graph, num_env=1, num_agents=num_agents)
+        graph = batchify_graph(graph, env.agent_labels_to_index)
         graph = jax.tree.map(lambda x: x[None, ...], graph)
 
         x = (obs, graph, dones)

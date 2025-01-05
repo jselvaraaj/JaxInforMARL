@@ -75,6 +75,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         dist_to_goal_reward_ratio=0.5,
         agent_visibility_radius: int = 0.5,
         agent_max_speed: int = 1,
+        entity_acceleration=1,
         entities_initial_coord_radius=1,
     ):
         super().__init__(
@@ -164,7 +165,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             ]
         )
         self.entity_mass = jnp.full(self.num_entities, 1.0)
-        self.entity_acceleration = jnp.full(self.num_agents, 5.0)
+        self.entity_acceleration = jnp.full(self.num_agents, entity_acceleration)
 
         self.entity_max_speed = jnp.concatenate(
             [
