@@ -16,12 +16,12 @@ class MAPPOConfig(struct.PyTreeNode):
             """
 
             num_agents = 6
-            max_steps = 100
-            dist_to_goal_reward_ratio = 0.5
-            agent_visibility_radius = 2
+            max_steps = 50
+            dist_to_goal_reward_ratio = 0.25
+            agent_visibility_radius = 1
             agent_max_speed = -1
             entities_initial_coord_radius = 1
-            entity_acceleration = 1
+            entity_acceleration = 5
 
         env_cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()
@@ -68,11 +68,11 @@ class MAPPOConfig(struct.PyTreeNode):
         fc_dim_size = 128
         gru_hidden_dim = 128
 
-        actor_num_hidden_linear_layer = 2
-        critic_num_hidden_linear_layer = 2
+        actor_num_hidden_linear_layer = 4
+        critic_num_hidden_linear_layer = 4
 
         embedding_dim = 4
-        num_graph_attn_layers = 3
+        num_graph_attn_layers = 4
         graph_fc_dim_size = 16
         num_heads_per_attn_layer = 2
 
