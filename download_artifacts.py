@@ -1,7 +1,7 @@
 import wandb
 
 # Change me
-artifact_name = "josssdan/JaxInforMARL/PPO_RNN_Runner_State:v49"
+artifact_name = "josssdan/JaxInforMARL/PPO_RNN_Runner_State:v53"
 
 api = wandb.Api()
 artifact = api.artifact(artifact_name, type="model")

@@ -75,6 +75,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         dist_to_goal_reward_ratio=0.5,
         agent_visibility_radius: int = 0.5,
         agent_max_speed: int = 1,
+        entities_initial_coord_radius=1,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -121,6 +122,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             self.observation_spaces,
             {_id: Box(-jnp.inf, jnp.inf, (6,)) for _id in self.agent_labels},
         )
+        self.entities_initial_coord_radius = entities_initial_coord_radius
 
         assert (
             color is None or len(color) == num_agents + self.num_landmarks
@@ -220,13 +222,15 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         key_agent, key_landmark = jax.random.split(key)
 
+        r = self.entities_initial_coord_radius
+
         entity_positions = jnp.concatenate(
             [
                 jax.random.uniform(
-                    key_agent, (self.num_agents, 2), minval=-1.0, maxval=+1.0
+                    key_agent, (self.num_agents, 2), minval=-r, maxval=+r
                 ),
                 jax.random.uniform(
-                    key_landmark, (self.num_landmarks, 2), minval=-1.0, maxval=+1.0
+                    key_landmark, (self.num_landmarks, 2), minval=-r, maxval=+r
                 ),
             ]
         )

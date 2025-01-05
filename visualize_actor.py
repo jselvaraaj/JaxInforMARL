@@ -65,7 +65,7 @@ def get_restored_actor(artifact_name):
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v33"
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v53"
     config, actor, restored_params, actor_init_hidden_state, env = get_restored_actor(
         artifact_name
     )

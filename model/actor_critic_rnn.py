@@ -57,12 +57,15 @@ class ActorRNN(nn.Module):
         rnn_in = (embedding, dones)
         hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        actor_mean = nn.Dense(
-            self.config.network.gru_hidden_dim,
-            kernel_init=orthogonal(2),
-            bias_init=constant(0.0),
-        )(embedding)
-        actor_mean = nn.relu(actor_mean)
+        for _ in range(self.config.network.actor_num_hidden_linear_layer):
+            embedding = nn.Dense(
+                self.config.network.gru_hidden_dim,
+                kernel_init=orthogonal(2),
+                bias_init=constant(0.0),
+            )(embedding)
+            embedding = nn.relu(embedding)
+        actor_mean = embedding
+
         action_logits = nn.Dense(
             self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(actor_mean)
@@ -218,12 +221,6 @@ class GraphTransformerActorRNN(nn.Module):
         ]
         obs = jnp.concatenate([obs, agent_node_features], axis=-1)
 
-        # nodes: Float[Array, "node_id features"]
-        # edges: Float[Array, "edge_id features"]
-        # receivers/senders: Int[Array, "edge_id"]
-        # n_node/n_edge: Int[Array, "graph_id"]
-        # here graph_id is like batch_id. One different environment/batch has different graphs
-
         hidden, pi = ActorRNN(self.action_dim, self.config)(hidden, (obs, dones))
 
         return hidden, pi
@@ -238,7 +235,7 @@ class CriticRNN(nn.Module):
         _w_s, graph, dones = x
         nodes = graph.nodes
 
-        # Embed entity.
+        # Embed entity_type.
         entity_type = nodes[..., -1].astype(jnp.int32)
         entity_emb = nn.Embed(2, self.config.network.embedding_dim)(entity_type)
         nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
@@ -257,12 +254,15 @@ class CriticRNN(nn.Module):
         rnn_in = (embedding, dones)
         hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        critic = nn.Dense(
-            self.config.network.gru_hidden_dim,
-            kernel_init=orthogonal(2),
-            bias_init=constant(0.0),
-        )(embedding)
-        critic = nn.relu(critic)
+        for _ in range(self.config.network.critic_num_hidden_linear_layer):
+            embedding = nn.Dense(
+                self.config.network.gru_hidden_dim,
+                kernel_init=orthogonal(2),
+                bias_init=constant(0.0),
+            )(embedding)
+            embedding = nn.relu(embedding)
+
+        critic = embedding
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
             critic
         )
