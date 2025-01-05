@@ -131,7 +131,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             neighborhood_radius is None or neighborhood_radius.shape[0] == num_agents
         ), "neighborhood_radius must be provided for each agent"
         self.neighborhood_radius = default(
-            neighborhood_radius, jnp.full(num_agents, 0.30)
+            neighborhood_radius, jnp.full(num_agents, 0.5)
         )
 
         assert 0.0 <= local_ratio <= 1.0, "local_ratio must be between 0.0 and 1.0"
@@ -220,10 +220,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
         entity_positions = jnp.concatenate(
             [
                 jax.random.uniform(
-                    key_agent, (self.num_agents, 2), minval=-2.0, maxval=+2.0
+                    key_agent, (self.num_agents, 2), minval=-1.0, maxval=+1.0
                 ),
                 jax.random.uniform(
-                    key_landmark, (self.num_landmarks, 2), minval=-2.0, maxval=+2.0
+                    key_landmark, (self.num_landmarks, 2), minval=-1.0, maxval=+1.0
                 ),
             ]
         )
