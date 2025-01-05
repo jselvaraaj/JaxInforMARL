@@ -58,7 +58,7 @@ class MAPPOConfig(struct.PyTreeNode):
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
+        num_envs = 4
         gamma = 0.99
         total_timesteps = 1e4
         ppo_config = PPOConfig()
@@ -71,9 +71,9 @@ class MAPPOConfig(struct.PyTreeNode):
         critic_num_hidden_linear_layer = 1
 
         embedding_dim = 4
-        num_graph_attn_layers = 3
+        num_graph_attn_layers = 2
         graph_fc_dim_size = 16
-        num_heads_per_attn_layer = 2
+        num_heads_per_attn_layer = 3
 
     class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"

@@ -278,17 +278,17 @@ class TargetMPEEnvironment(MultiAgentEnv):
     @partial(jax.jit, static_argnums=[0])
     def get_graph(self, state: MPEState) -> MultiAgentGraph:
 
-        @partial(jax.vmap)
+        @partial(jax.vmap, in_axes=(None, 0))
+        @partial(jax.vmap, in_axes=(0, None))
         def get_node_feature(
-            entity_idx: Int[Array, EntityIndex]
+            entity_idx: Int[Array, EntityIndex], agent_id: Int[Array, AgentIndex]
         ) -> Int[Array, f"{EntityIndex} 7"]:
-
             goal_idx = jnp.where(
                 entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
             )
 
             goal_relative_coord = (
-                state.entity_positions[goal_idx] - state.entity_positions[entity_idx]
+                state.entity_positions[goal_idx] - state.entity_positions[agent_id]
             )
             entity_type = jnp.where(
                 entity_idx < self.num_agents,
@@ -304,50 +304,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 ],
             )
             return node_feature
-
-        # @partial(jax.vmap)
-        # def get_agent_to_entity_edge(agent_idx: Int[Array, AgentIndex]) -> tuple[
-        #     Int[Array, f"{AgentIndex} EdgeIndex 2"],
-        #     Int[Array, f"{AgentIndex} EdgeIndex 2"],
-        #     Int[Array, f"{AgentIndex} EdgeIndex 1"],
-        # ]:
-        #     agent_position = state.entity_positions[agent_idx]
-        #     dist = jnp.linalg.norm(
-        #         state.entity_positions - agent_position[None], axis=1
-        #     )
-        #
-        #     agent_idx_v = jnp.full(self.num_entities, agent_idx)
-        #     # From entity to agent edges.
-        #     # Note the agent to agent edges are not directly included here but will be added.
-        #     # For example the edge for agent_idx to some other agent will be added in the other agent's computation.
-        #     is_entity_within_agent_neighborhood = (
-        #         dist <= self.neighborhood_radius[agent_idx]
-        #     )
-        #     senders = jnp.where(
-        #         is_entity_within_agent_neighborhood,
-        #         self.entity_indices,
-        #         jnp.full(self.num_entities, -1),
-        #     )
-        #
-        #     receivers = jnp.where(
-        #         is_entity_within_agent_neighborhood,
-        #         agent_idx_v,
-        #         jnp.full(self.num_entities, -1),
-        #     )
-        #
-        #     edge_feature = jnp.where(
-        #         is_entity_within_agent_neighborhood,
-        #         dist,
-        #         jnp.full(self.num_entities, -1),
-        #     )
-        #
-        #     return receivers, senders, edge_feature
-        #
-        # def add_landmark_self_edges(receivers, senders):
-        #     landmark_idx = jnp.arange(self.num_agents, self.num_entities)
-        #     receivers = jnp.concatenate([receivers, landmark_idx])
-        #     senders = jnp.concatenate([senders, landmark_idx])
-        #     return receivers, senders
 
         ### 2) Compute pairwise distances in one shot
         # agent_positions shape: (num_agents, 2)
@@ -381,21 +337,28 @@ class TargetMPEEnvironment(MultiAgentEnv):
         # receivers, senders, edge_features = jax.tree.map(jnp.ravel, edges)
         # receivers, senders = add_landmark_self_edges(receivers, senders)
 
-        node_features = get_node_feature(self.entity_indices)
+        node_features_for_all_agents = get_node_feature(
+            self.entity_indices, self.agent_indices
+        )
         n_node = jnp.array([self.num_entities])
         n_edge = jnp.array([receivers.shape[0]])
-        graph = GraphsTupleWithAgentIndex(
-            nodes=node_features,
-            edges=edge_features,
-            globals=None,
-            receivers=receivers,
-            senders=senders,
-            n_node=n_node,
-            n_edge=n_edge,
-            agent_indices=None,
-        )
+        agent_label_to_graph = {
+            agent_label: GraphsTupleWithAgentIndex(
+                nodes=node_features_for_all_agents[
+                    self.agent_labels_to_index[agent_label]
+                ],
+                edges=edge_features,
+                globals=None,
+                receivers=receivers,
+                senders=senders,
+                n_node=n_node,
+                n_edge=n_edge,
+                agent_indices=None,
+            )
+            for agent_label in self.agent_labels
+        }
 
-        return graph
+        return agent_label_to_graph
 
     @partial(jax.vmap, in_axes=[None, 0, 0, 0, 0])
     def _control_to_agents_forces(

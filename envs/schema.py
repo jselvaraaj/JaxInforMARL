@@ -22,7 +22,7 @@ AgentLabel: TypeAlias = EntityLabel
 MultiAgentObservation: TypeAlias = dict[AgentLabel, Array]
 MultiAgentAction: TypeAlias = dict[AgentLabel, int]
 MultiAgentReward: TypeAlias = dict[AgentLabel, float]
-MultiAgentGraph: TypeAlias = GraphsTupleWithAgentIndex
+MultiAgentGraph: TypeAlias = dict[AgentLabel, GraphsTupleWithAgentIndex]
 MultiAgentDone: TypeAlias = dict[AgentLabel, Bool]
 Info: TypeAlias = dict
 
