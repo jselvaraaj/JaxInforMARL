@@ -574,9 +574,29 @@ def make_train(config: MAPPOConfig):
             rng = update_state[-1]
 
             def callback(metric):
+                out = metric["out"]
+                progress = metric["update_steps"] / config.derived_values.num_updates
+                if (
+                    config.wandb.save_model
+                    and metric["update_steps"] % config.wandb.save_every_update_steps
+                    == 0
+                ):
+                    model_artifact = wandb.Artifact(
+                        "PPO_RNN_Runner_State", type="model"
+                    )
+                    running_script_path = os.path.abspath(".")
+                    checkpoint_dir = os.path.join(
+                        running_script_path,
+                        f"saved_actor/PPO_Runner_Checkpoint_{progress}",
+                    )
+                    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+                    save_args = orbax_utils.save_args_from_target(out)
+                    orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
+                    model_artifact.add_dir(checkpoint_dir)
+                    wandb.log_artifact(model_artifact)
                 print(
                     "progress: ",
-                    metric["update_steps"] / config.derived_values.num_updates,
+                    progress,
                 )
                 wandb.log(
                     {
@@ -589,6 +609,7 @@ def make_train(config: MAPPOConfig):
                 )
 
             metric["update_steps"] = update_steps
+            metric["out"] = train_states[0]
             jax.experimental.io_callback(callback, None, metric)
             update_steps += 1
             runner_state = (

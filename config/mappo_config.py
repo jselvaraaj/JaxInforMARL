@@ -18,7 +18,7 @@ class MAPPOConfig:
                 max_steps: Rollout length in a single environment.
             """
 
-            num_agents = 3
+            num_agents = 6
             max_steps = 25
 
             def to_dict(self):
@@ -85,6 +85,7 @@ class MAPPOConfig:
         project = "JaxInforMARL"
         mode = "disabled"
         save_model = False
+        save_every_update_steps = 1e2
 
     @dataclass
     class DerivedValues:
