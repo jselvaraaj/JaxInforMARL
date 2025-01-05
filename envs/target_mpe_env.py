@@ -74,7 +74,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
         dt: float = DT,
-        local_ratio=0.25,
+        local_ratio=0.5,
     ):
         super().__init__(
             num_agents=num_agents,
