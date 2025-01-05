@@ -220,10 +220,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
         entity_positions = jnp.concatenate(
             [
                 jax.random.uniform(
-                    key_agent, (self.num_agents, 2), minval=-1.0, maxval=+1.0
+                    key_agent, (self.num_agents, 2), minval=-2.0, maxval=+2.0
                 ),
                 jax.random.uniform(
-                    key_landmark, (self.num_landmarks, 2), minval=-1.0, maxval=+1.0
+                    key_landmark, (self.num_landmarks, 2), minval=-2.0, maxval=+2.0
                 ),
             ]
         )

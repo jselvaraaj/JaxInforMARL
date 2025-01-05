@@ -60,7 +60,7 @@ class MPEVisualizer(object):
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(5, 5))
 
-        ax_lim = 2
+        ax_lim = 3
         self.ax.set_xlim([-ax_lim, ax_lim])
         self.ax.set_ylim([-ax_lim, ax_lim])
 
@@ -86,7 +86,7 @@ class MPEVisualizer(object):
             self.ax.add_patch(c)
             self.entity_artists.append(c)
 
-        self.step_counter = self.ax.text(-1.95, 1.95, f"Step: {state.step}", va="top")
+        self.step_counter = self.ax.text(-2.95, 2.95, f"Step: {state.step}", va="top")
 
     def update(self, frame):
         state = self.state_seq[frame]

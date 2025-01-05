@@ -18,7 +18,7 @@ class MAPPOConfig:
                 max_steps: Rollout length in a single environment.
             """
 
-            num_agents = 6
+            num_agents = 4
             max_steps = 25
 
             def to_dict(self):
@@ -64,7 +64,7 @@ class MAPPOConfig:
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 4
+        num_envs = 1
         gamma = 0.99
         total_timesteps = 1e4
         ppo_config = PPOConfig()
