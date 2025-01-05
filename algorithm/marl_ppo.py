@@ -630,8 +630,9 @@ def make_train(config: MAPPOConfig):
 
             def callback(metric):
                 out = metric["out"]
-                progress = int(
-                    (metric["update_steps"] / config.derived_values.num_updates) * 100
+                progress = round(
+                    (metric["update_steps"] / config.derived_values.num_updates) * 100,
+                    4,
                 )
                 update_steps = metric["update_steps"]
                 if (
