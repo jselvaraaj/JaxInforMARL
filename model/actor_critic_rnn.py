@@ -133,7 +133,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
             nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=1)
             nodes_seg_sum = linear_layer(nodes_seg_sum)
 
-        nodes += nodes_seg_sum
+        nodes = nodes_seg_sum
 
         nodes = nn.relu(nodes)
 
