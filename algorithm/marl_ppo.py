@@ -630,7 +630,9 @@ def make_train(config: MAPPOConfig):
 
             def callback(metric):
                 out = metric["out"]
-                progress = metric["update_steps"] / config.derived_values.num_updates
+                progress = int(
+                    (metric["update_steps"] / config.derived_values.num_updates) * 100
+                )
                 update_steps = metric["update_steps"]
                 if (
                     config.wandb.save_model
@@ -650,7 +652,7 @@ def make_train(config: MAPPOConfig):
                     orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
                     model_artifact.add_dir(checkpoint_dir)
                     wandb.log_artifact(model_artifact)
-                print(f"progress: {progress}; update step: {update_steps}")
+                print(f"progress: {progress}% ; update step: {update_steps}")
                 wandb.log(
                     {
                         "returns": metric["returned_episode_returns"][-1, :].mean(),
