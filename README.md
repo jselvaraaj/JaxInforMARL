@@ -9,6 +9,7 @@
    and changing the structure of config.
 4. `download_artifacts.py` for downloading trained actor weights from wandb.
 5. `visualize_actor.py` for visualizing the trained actor in a local environment.
+6. `model/actor_critic_rnn.py` has all the flax linen networks used in the PPO.
 
 # Typical train and test flow:
 
