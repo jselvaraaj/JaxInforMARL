@@ -19,7 +19,7 @@ class MAPPOConfig(struct.PyTreeNode):
             max_steps = 25
             dist_to_goal_reward_ratio = 0.5
             agent_visibility_radius = 0.5
-            agent_max_speed = 1
+            agent_max_speed = -1
             entities_initial_coord_radius = 1
 
         env_cls_name = "TargetMPEEnvironment"
@@ -67,13 +67,13 @@ class MAPPOConfig(struct.PyTreeNode):
         fc_dim_size = 128
         gru_hidden_dim = 128
 
-        actor_num_hidden_linear_layer = 2
-        critic_num_hidden_linear_layer = 2
+        actor_num_hidden_linear_layer = 1
+        critic_num_hidden_linear_layer = 1
 
         embedding_dim = 4
-        num_graph_attn_layers = 2
+        num_graph_attn_layers = 3
         graph_fc_dim_size = 16
-        num_heads_per_attn_layer = 3
+        num_heads_per_attn_layer = 2
 
     class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"
