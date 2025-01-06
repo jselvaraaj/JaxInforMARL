@@ -11,7 +11,7 @@ from algorithm.marl_ppo import (
 )
 from config.mappo_config import MAPPOConfig
 from envs.mpe_visualizer import MPEVisualizer
-from model.actor_critic_rnn import GraphTransformerActorRNN
+from model.actor_critic_rnn import GraphAttentionActorRNN
 
 
 def get_restored_actor(artifact_name):
@@ -26,7 +26,7 @@ def get_restored_actor(artifact_name):
 
     num_actions = env.action_space_for_agent(env.agent_labels[0]).n
 
-    actor_network = GraphTransformerActorRNN(num_actions, config=config)
+    actor_network = GraphAttentionActorRNN(num_actions, config=config)
 
     ac_init_x, ac_init_hstate, graph_init = get_actor_init_input(config, env)
 

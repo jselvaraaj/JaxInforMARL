@@ -22,7 +22,7 @@ from config.mappo_config import MAPPOConfig as MAPPOConfig, config_to_dict
 from envs.schema import MultiAgentGraph
 from envs.target_mpe_env import GraphsTupleWithAgentIndex
 from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper
-from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphTransformerActorRNN
+from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphAttentionActorRNN
 
 
 class Transition(NamedTuple):
@@ -195,7 +195,7 @@ def make_train(config: MAPPOConfig):
         nonlocal env, config, ppo_config, linear_schedule
         num_env = config.training_config.num_envs
         # INIT NETWORK
-        actor_network = GraphTransformerActorRNN(
+        actor_network = GraphAttentionActorRNN(
             env.action_space_for_agent(env.agent_labels[0]).n, config=config
         )
 

@@ -143,7 +143,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         return graph._replace(nodes=nodes)
 
 
-class GraphTransformer(nn.Module):
+class GraphStackedMultiHeadAttention(nn.Module):
     config: MAPPOConfig
 
     @nn.compact
@@ -200,7 +200,7 @@ class GraphTransformer(nn.Module):
         return graph
 
 
-class GraphTransformerActorRNN(nn.Module):
+class GraphAttentionActorRNN(nn.Module):
     action_dim: list[int]
     config: MAPPOConfig
 
@@ -211,7 +211,7 @@ class GraphTransformerActorRNN(nn.Module):
 
         agent_indices = graph.agent_indices
 
-        graph_embedding = GraphTransformer(self.config)(graph)
+        graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
         nodes = graph_embedding.nodes
 
         agent_node_features = graph_embedding.nodes[
