@@ -592,7 +592,7 @@ def ppo_single_update(
     rng = update_state[-1]
 
     def callback(metric):
-        out = metric["out"]
+        out = metric["actor_network"]
         progress = round(
             (metric["update_steps"] / config.derived_values.num_updates) * 100,
             4,
@@ -627,7 +627,9 @@ def ppo_single_update(
         )
 
     metric["update_steps"] = update_steps
-    metric["out"] = train_states[0]
+    metric["actor_network"] = {
+        "actor_train_params": train_states[0].params,
+    }
     jax.experimental.io_callback(callback, None, metric)
     update_steps += 1
     actor_critic_train_states = ActorAndCriticTrainStates(*train_states)
