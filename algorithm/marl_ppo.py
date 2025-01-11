@@ -64,7 +64,9 @@ def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
     agent_indices_for_all_agents = []
     n_edge_for_all_agents = []
     for agent_label in graph:
-        nodes, edges, receivers, senders, _, n_node, n_edge, _ = graph[agent_label]
+        nodes, edges, receivers, senders, _, n_node, n_edge, agent_indices = graph[
+            agent_label
+        ]
         num_env, _, _ = nodes.shape
         receivers = receivers.astype(jnp.int32)
         senders = senders.astype(jnp.int32)
@@ -77,7 +79,6 @@ def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
         receivers_for_all_agents.append(receivers)
         senders_for_all_agents.append(senders)
         n_node_for_all_agents.append(n_node)
-        agent_indices = jnp.full((num_env,), agent_label_index[agent_label])
         agent_indices_for_all_agents.append(agent_indices)
         n_edge_for_all_agents.append(n_edge)
 
@@ -145,6 +146,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
     )
     n_node = jnp.array(num_env * [env.num_entities])
     n_edge = jnp.array(num_env * [2 * env.num_agents])
+    agent_indices = jnp.full((num_env,), 0)
     graph_init = batchify_graph(
         {
             agent_label: GraphsTupleWithAgentIndex(
@@ -155,7 +157,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
                 senders=senders,
                 n_node=n_node,
                 n_edge=n_edge,
-                agent_indices=None,
+                agent_indices=agent_indices,
             )
             for agent_label in env.agent_labels
         },

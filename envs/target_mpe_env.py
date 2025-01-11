@@ -354,7 +354,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 senders=senders,
                 n_node=n_node,
                 n_edge=n_edge,
-                agent_indices=None,
+                agent_indices=jnp.asarray(self.agent_labels_to_index[agent_label]),
             )
             for agent_label in self.agent_labels
         }
