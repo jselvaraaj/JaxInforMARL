@@ -28,9 +28,9 @@ def get_restored_actor(artifact_name):
 
     actor_network = GraphAttentionActorRNN(num_actions, config=config)
 
-    ac_init_x, ac_init_hstate, graph_init = get_actor_init_input(config, env)
+    ac_init_x, ac_init_h_state, graph_init = get_actor_init_input(config, env)
 
-    actor_network_params = actor_network.init(_rng_actor, ac_init_hstate, ac_init_x)
+    actor_network_params = actor_network.init(_rng_actor, ac_init_h_state, ac_init_x)
 
     running_script_path = os.path.abspath(".")
     checkpoint_dir = os.path.join(running_script_path, artifact_name)
@@ -50,18 +50,18 @@ def get_restored_actor(artifact_name):
         "actor_train_params": abstract_actor_params,
     }
 
-    ckptr = orbax.checkpoint.AsyncCheckpointer(
+    ck_ptr = orbax.checkpoint.AsyncCheckpointer(
         orbax.checkpoint.StandardCheckpointHandler()
     )
 
-    raw_restored = ckptr.restore(
+    raw_restored = ck_ptr.restore(
         checkpoint_dir,
         args=orbax.checkpoint.args.StandardRestore(abstract_state, strict=False),
     )
 
     restored_actor_params = raw_restored["actor_train_params"]
 
-    return config, actor_network, restored_actor_params, ac_init_hstate, env
+    return config, actor_network, restored_actor_params, ac_init_h_state, env
 
 
 if __name__ == "__main__":

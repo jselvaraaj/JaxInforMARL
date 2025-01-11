@@ -745,7 +745,7 @@ def make_train(config: MAPPOConfig):
         actor_critic_hidden_state = ActorAndCriticHiddenStates(
             ac_init_h_state, cr_init_h_state
         )
-        runner_state = EnvStepRunnerState(
+        env_step_runner_state = EnvStepRunnerState(
             actor_critic_train_states,
             env_state,
             obs_v,
@@ -762,7 +762,7 @@ def make_train(config: MAPPOConfig):
         )
         runner_state, metric = jax.lax.scan(
             ppo_single_update_with_static_args,
-            UpdateStepRunnerState(runner_state, 0),
+            UpdateStepRunnerState(env_step_runner_state, 0),
             None,
             config.derived_values.num_updates,
         )
@@ -789,8 +789,10 @@ def main():
         train_jit = jax.jit(make_train(config))
         out = train_jit(rng)
         block_until_ready(out)
+
+    update_step_runner_state: UpdateStepRunnerState = out["runner_state"]
     out = {
-        "actor_train_params": out["runner_state"][0][0][0].params,
+        "actor_train_params": update_step_runner_state.update_step_runner_state.network_train_states.actor_train_state.params,
         # "critic_train_state": out["runner_state"][0][0][1].params,
     }
 
