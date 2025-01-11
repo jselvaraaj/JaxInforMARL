@@ -15,7 +15,7 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 6
+            num_agents = 3
             max_steps = 50
             dist_to_goal_reward_ratio = 0.25
             agent_visibility_radius = 1
@@ -59,7 +59,7 @@ class MAPPOConfig(struct.PyTreeNode):
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
+        num_envs = 4
         gamma = 0.99
         total_timesteps = 1e4
         ppo_config = PPOConfig()

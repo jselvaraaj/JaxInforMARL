@@ -613,7 +613,9 @@ def ppo_single_update(
             orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
             model_artifact.add_dir(checkpoint_dir)
             wandb.log_artifact(model_artifact)
-        print(f"progress: {progress:.4f}% ; update step: {update_steps}")
+        print(
+            f"progress: {progress:.4f}% ; update step: {update_steps}/{config.derived_values.num_updates}"
+        )
         wandb.log(
             {
                 "returns": metric["returned_episode_returns"][-1, :].mean(),
