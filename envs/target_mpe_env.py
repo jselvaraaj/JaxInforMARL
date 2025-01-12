@@ -292,6 +292,13 @@ class TargetMPEEnvironment(MultiAgentEnv):
             communication_message = jnp.concatenate(
                 [state.agent_communication_message, landmark_communication_message]
             )
+        elif self.agent_communication_type == CommunicationType.PAST_ACTION:
+            landmark_communication_message = jnp.zeros_like(
+                state.agent_communication_message
+            )
+            communication_message = jnp.concatenate(
+                [state.agent_communication_message, landmark_communication_message]
+            )
 
         @partial(jax.vmap, in_axes=(None, 0))
         @partial(jax.vmap, in_axes=(0, None))
@@ -311,7 +318,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 self.landmark_entity_type,
             )
             node_communication_message = jnp.asarray([])
-            if self.agent_communication_type == CommunicationType.HIDDEN_STATE:
+            if self.agent_communication_type is not None:
                 node_communication_message = communication_message[entity_idx]
             return jnp.concatenate(
                 (

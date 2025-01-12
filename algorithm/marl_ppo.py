@@ -17,7 +17,7 @@ from beartype import beartype
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from jax import block_until_ready
-from jaxtyping import Array, jaxtyped
+from jaxtyping import Array, jaxtyped, Float
 
 import envs
 from config.mappo_config import (
@@ -117,7 +117,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
     if communication_type == CommunicationType.HIDDEN_STATE:
         node_feature_dim += config.network.gru_hidden_dim
     elif communication_type == CommunicationType.PAST_ACTION:
-        node_feature_dim += env.num_agents
+        node_feature_dim += 1
     nodes = jnp.zeros(
         (
             num_env,
@@ -212,7 +212,9 @@ class StaticVariables(NamedTuple):
     env: MultiAgentEnv
     config: MAPPOConfig
     actor_network: GraphAttentionActorRNN
+    actor_initial_hidden_State: Float[Array, "..."]
     critic_network: CriticRNN
+    initial_communication_message: Float[Array, "..."]
 
 
 @jaxtyped(typechecker=beartype)
@@ -235,6 +237,7 @@ class EnvStepRunnerState(NamedTuple):
     graph: MultiAgentGraph
     dones: Array
     hidden_states: ActorAndCriticHiddenStates
+    communication_message: Float[Array, "..."]
     rng_keys: PRNGKey
 
 
@@ -260,7 +263,14 @@ def _env_step(
     runner_state: EnvStepRunnerState,
     unused,
 ):
-    env, config, actor_network, critic_network = env_step_static_variables
+    (
+        env,
+        config,
+        actor_network,
+        ac_init_h_state,
+        critic_network,
+        initial_communication_message,
+    ) = env_step_static_variables
 
     num_env = config.training_config.num_envs
 
@@ -271,27 +281,28 @@ def _env_step(
         last_graph,
         last_done,
         h_states,
+        last_communication_message,
         rng,
     ) = runner_state
 
-    ac_init_h_state = ScannedRNN.initialize_carry(
-        config.derived_values.num_actors, config.network.gru_hidden_dim
-    )
     ac_h_state = jnp.where(
         last_done[..., None], ac_init_h_state, h_states.actor_hidden_state
     )
     h_states = h_states._replace(actor_hidden_state=ac_h_state)
 
     communication_type = config.env_config.kwargs.agent_communication_type
-    initial_agent_communication_message = jnp.asarray([])
+
+    initial_agent_communication_message = initial_communication_message
     agent_communication_message = initial_agent_communication_message
     if communication_type == CommunicationType.HIDDEN_STATE:
-        initial_agent_communication_message = ac_init_h_state.reshape(
-            num_env, env.num_agents, *ac_init_h_state.shape[1:]
+        agent_communication_message = last_communication_message.reshape(
+            num_env, env.num_agents, *last_communication_message.shape[1:]
         )
-        agent_communication_message = ac_h_state.reshape(
-            num_env, env.num_agents, *ac_h_state.shape[1:]
+    elif communication_type == CommunicationType.PAST_ACTION:
+        agent_communication_message = last_communication_message.reshape(
+            num_env, env.num_agents, *last_communication_message.shape[1:]
         )
+
     log_env_state = log_env_state.replace(
         env_state=log_env_state.env_state.replace(
             agent_communication_message=agent_communication_message
@@ -353,6 +364,11 @@ def _env_step(
         done, env.agent_labels, config.derived_values.num_actors
     ).squeeze()
 
+    if communication_type == CommunicationType.HIDDEN_STATE:
+        last_communication_message = ac_h_state
+    elif communication_type == CommunicationType.PAST_ACTION:
+        last_communication_message = action.squeeze()[..., None]
+
     transition = Transition(
         jnp.tile(done["__all__"], env.num_agents),
         last_done,
@@ -372,6 +388,7 @@ def _env_step(
         graph_v,
         done_batch,
         ActorAndCriticHiddenStates(ac_h_state, cr_h_state),
+        last_communication_message,
         rng,
     )
     return runner_state, transition
@@ -384,7 +401,7 @@ def _update_epoch(
     update_state: UpdateEpochState,
     unused,
 ):
-    _, config, actor_network, critic_network = update_epoch_static_variables
+    _, config, actor_network, _, critic_network, _ = update_epoch_static_variables
     ppo_config = config.training_config.ppo_config
 
     def _update_minibatch(train_states, batch_info):
@@ -553,7 +570,14 @@ def ppo_single_update(
     update_runner_state: UpdateStepRunnerState,
     unused,
 ):
-    env, config, actor_network, critic_network = static_variables
+    (
+        env,
+        config,
+        actor_network,
+        ac_init_h_state,
+        critic_network,
+        initial_communication_message,
+    ) = static_variables
     ppo_config = config.training_config.ppo_config
     num_env = config.training_config.num_envs
 
@@ -561,18 +585,33 @@ def ppo_single_update(
     runner_state, update_steps = update_runner_state
 
     last_step_h_states = runner_state.hidden_states
+
     _env_step_with_static_args = partial(
         _env_step,
-        StaticVariables(env, config, actor_network, critic_network),
+        StaticVariables(
+            env,
+            config,
+            actor_network,
+            ac_init_h_state,
+            critic_network,
+            initial_communication_message,
+        ),
     )
     runner_state, traj_batch = jax.lax.scan(
         _env_step_with_static_args, runner_state, None, ppo_config.num_steps_per_update
     )
 
     # CALCULATE ADVANTAGE
-    train_states, env_state, last_obs, last_graph, last_done, h_states, rng = (
-        runner_state
-    )
+    (
+        train_states,
+        env_state,
+        last_obs,
+        last_graph,
+        last_done,
+        h_states,
+        last_actions,
+        rng,
+    ) = runner_state
 
     last_world_state = last_obs["world_state"].swapaxes(0, 1)
     last_world_state = last_world_state.reshape((config.derived_values.num_actors, -1))
@@ -692,6 +731,7 @@ def ppo_single_update(
         last_graph,
         last_done,
         actor_critic_hidden_states,
+        last_actions,
         rng,
     )
     return UpdateStepRunnerState(runner_state, update_steps), metric
@@ -789,19 +829,30 @@ def make_train(config: MAPPOConfig):
         )
         communication_type = config.env_config.kwargs.agent_communication_type
 
-        initial_agent_communication_message = jnp.asarray([])
+        initial_communication_message = jnp.asarray([])
         if communication_type == CommunicationType.HIDDEN_STATE:
-            initial_agent_communication_message = ac_init_h_state.reshape(
-                num_env, env.num_agents, *ac_init_h_state.shape[1:]
+            initial_communication_message = ac_init_h_state
+        elif communication_type == CommunicationType.PAST_ACTION:
+            initial_communication_message = jnp.full(
+                (config.derived_values.num_actors, 1), -1
             )
 
+        initial_communication_message_env_input = initial_communication_message
+        if initial_communication_message_env_input.size != 0:
+            initial_communication_message_env_input = (
+                initial_communication_message_env_input.reshape(
+                    num_env,
+                    env.num_agents,
+                    *initial_communication_message_env_input.shape[1:],
+                )
+            )
         obs_v, graph_v, env_state = jax.vmap(
             env.reset,
             in_axes=(
                 0,
-                0 if initial_agent_communication_message.size != 0 else None,
+                0 if initial_communication_message_env_input.size != 0 else None,
             ),
-        )(reset_rng, initial_agent_communication_message)
+        )(reset_rng, initial_communication_message_env_input)
 
         rng, _rng = jax.random.split(rng)
         actor_critic_train_states = ActorAndCriticTrainStates(
@@ -817,10 +868,16 @@ def make_train(config: MAPPOConfig):
             graph_v,
             jnp.zeros(config.derived_values.num_actors, dtype=bool),
             actor_critic_hidden_state,
+            initial_communication_message,
             _rng,
         )
         update_step_static_args = StaticVariables(
-            env, config, actor_network, critic_network
+            env,
+            config,
+            actor_network,
+            ac_init_h_state,
+            critic_network,
+            initial_communication_message_env_input,
         )
         ppo_single_update_with_static_args = partial(
             ppo_single_update, update_step_static_args
