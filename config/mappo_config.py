@@ -9,6 +9,7 @@ from flax import struct
 class CommunicationType(Enum):
     HIDDEN_STATE = 1
     PAST_ACTION = 2
+    CURRENT_ACTION = 3
 
 
 @beartype
@@ -22,15 +23,15 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 10
+            num_agents = 3
             max_steps = 50
             dist_to_goal_reward_ratio = 0.30
-            agent_visibility_radius = 1.5
             agent_max_speed = -1
-            entities_initial_coord_radius = 2.5
+            agent_visibility_radius = (0.5, 1, 1.5, 2, 2.5)
+            entities_initial_coord_radius = (1, 2, 4, 8, 16)
             entity_acceleration = 5
-            one_time_death_reward = 20
-            agent_communication_type = CommunicationType.PAST_ACTION
+            one_time_death_reward = 15
+            agent_communication_type = CommunicationType.CURRENT_ACTION
             agent_control_noise_std = 0.2
 
         env_cls_name = "TargetMPEEnvironment"
@@ -69,9 +70,9 @@ class MAPPOConfig(struct.PyTreeNode):
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
+        num_envs = 4
         gamma = 0.99
-        total_timesteps = 2e6
+        total_timesteps = 1e4
         ppo_config = PPOConfig()
 
     class NetworkConfig(struct.PyTreeNode):
@@ -93,8 +94,8 @@ class MAPPOConfig(struct.PyTreeNode):
     class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"
         project = "JaxInforMARL"
-        mode = "online"
-        save_model = True
+        mode = "disabled"
+        save_model = False
         checkpoint_model_every_update_steps = 1e2
 
     class DerivedValues(struct.PyTreeNode):
@@ -143,7 +144,7 @@ class MAPPOConfig(struct.PyTreeNode):
 
 def config_to_dict(config):
     is_primitive_type = lambda obj: isinstance(
-        obj, (int, float, str, bool, type(None), CommunicationType)
+        obj, (int, float, str, bool, type(None), CommunicationType, tuple)
     )
     return {
         attr: (

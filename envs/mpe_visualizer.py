@@ -113,7 +113,7 @@ class MPEVisualizer(object):
 
             visibility_circle = Circle(
                 state.entity_positions[i],  # type: ignore
-                self.env.neighborhood_radius[i],
+                self.env.agent_visibility_radius[i],
                 color=color,
                 ec="lightgray",
                 alpha=0.05,

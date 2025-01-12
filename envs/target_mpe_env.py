@@ -48,6 +48,7 @@ class MPEState(MultiAgentState, struct.PyTreeNode):
     entity_velocities: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
     did_agent_die_this_time_step: Float[Array, f"{AgentIndex}"]
     agent_communication_message: Float[Array, f"{AgentIndex} ..."] | None
+    agent_visibility_radius: Float[Array, f"{AgentIndex}"]
 
 
 class TargetMPEEnvironment(MultiAgentEnv):
@@ -71,10 +72,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
         max_steps: int = MAX_STEPS,
         dt: float = DT,
         dist_to_goal_reward_ratio=0.5,
-        agent_visibility_radius: int = 0.5,
+        agent_visibility_radius=None,
         agent_max_speed: int = 1,
         entity_acceleration=1,
-        entities_initial_coord_radius=1,
+        entities_initial_coord_radius=None,
         one_time_death_reward=2,
         agent_communication_type=None,
         agent_control_noise_std=0,
@@ -86,6 +87,11 @@ class TargetMPEEnvironment(MultiAgentEnv):
             observation_spaces=observation_spaces,
             agent_labels=agent_labels,
         )
+
+        if entities_initial_coord_radius is None:
+            entities_initial_coord_radius = (1,)
+        if agent_visibility_radius is None:
+            agent_visibility_radius = (0.5,)
 
         self.num_landmarks = num_agents
         self.num_entities = self.num_agents + self.num_landmarks
@@ -126,7 +132,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             self.observation_spaces,
             {_id: Box(-jnp.inf, jnp.inf, (6,)) for _id in self.agent_labels},
         )
-        self.entities_initial_coord_radius = entities_initial_coord_radius
+        self.entities_initial_coord_radius = jnp.asarray(entities_initial_coord_radius)
 
         assert (
             color is None or len(color) == num_agents + self.num_landmarks
@@ -135,10 +141,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             color, [AGENT_COLOR] * self.num_agents + [OBS_COLOR] * self.num_landmarks
         )
 
-        assert (
-            agent_visibility_radius >= 0
-        ), "neighborhood_radius must be provided for each agent"
-        self.neighborhood_radius = jnp.full(num_agents, agent_visibility_radius)
+        self.agent_visibility_radius = jnp.asarray(agent_visibility_radius)
 
         assert (
             0.0 <= dist_to_goal_reward_ratio <= 1.0
@@ -226,9 +229,15 @@ class TargetMPEEnvironment(MultiAgentEnv):
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MPEState]:
         """Initialise with random positions"""
 
-        key_agent, key_landmark = jax.random.split(key)
+        key_agent, key_landmark, key_initial_coord, key_visibility_radius = (
+            jax.random.split(key, 4)
+        )
 
-        r = self.entities_initial_coord_radius
+        r = jax.random.choice(key_initial_coord, self.entities_initial_coord_radius)
+        agent_visibility_radius = jnp.full(
+            self.num_agents,
+            jax.random.choice(key_visibility_radius, self.agent_visibility_radius),
+        )
 
         entity_positions = jnp.concatenate(
             [
@@ -248,6 +257,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             step=0,
             did_agent_die_this_time_step=jnp.full(self.num_agents, False),
             agent_communication_message=initial_agent_communication_message,
+            agent_visibility_radius=agent_visibility_radius,
         )
         obs = self.get_observation(state)
         graph = self.get_graph(state)
@@ -293,7 +303,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
             communication_message = jnp.concatenate(
                 [state.agent_communication_message, landmark_communication_message]
             )
-        elif self.agent_communication_type == CommunicationType.PAST_ACTION:
+        elif (
+            self.agent_communication_type == CommunicationType.PAST_ACTION
+            or self.agent_communication_type == CommunicationType.CURRENT_ACTION
+        ):
             landmark_communication_message = jnp.zeros_like(
                 state.agent_communication_message
             )
@@ -343,7 +356,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         distances = jnp.linalg.norm(
             agent_positions[:, None, :] - entity_positions[None, :, :], axis=-1
         )
-        mask = distances <= self.neighborhood_radius[:, None]
+        mask = distances <= state.agent_visibility_radius[:, None]
         max_num_edge = self.num_entities * (self.num_entities - 1)
         valid_agent_idx, valid_entity_idx = jnp.nonzero(
             mask, size=max_num_edge, fill_value=-1
@@ -598,6 +611,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             step=state.step + 1,
             did_agent_die_this_time_step=did_agent_die_this_time_step,
             agent_communication_message=state.agent_communication_message,
+            agent_visibility_radius=state.agent_visibility_radius,
         )
         reward = self.reward(state)
 

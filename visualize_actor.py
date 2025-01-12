@@ -79,7 +79,7 @@ def get_restored_actor(artifact_name):
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v169"
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v174"
     (
         config,
         actor,

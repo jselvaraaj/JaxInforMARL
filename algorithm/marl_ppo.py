@@ -52,8 +52,8 @@ def batchify(x: dict, agent_list, num_actors):
     )  # [agent_0_env_1, agent_0_env_2 ....agent_n_env_(m-1), agent_n_env_m]
 
 
-def unbatchify(x: Array, agent_list, num_envs, num_actors):
-    x = x.reshape((num_actors, num_envs, -1))
+def unbatchify(x: Array, agent_list, num_envs, num_agents):
+    x = x.reshape((num_agents, num_envs, -1))
     return {a: x[i] for i, a in enumerate(agent_list)}
 
 
@@ -116,7 +116,10 @@ def get_actor_init_input(config: MAPPOConfig, env):
     communication_type = config.env_config.kwargs.agent_communication_type
     if communication_type == CommunicationType.HIDDEN_STATE:
         node_feature_dim += config.network.gru_hidden_dim
-    elif communication_type == CommunicationType.PAST_ACTION:
+    elif (
+        communication_type == CommunicationType.PAST_ACTION
+        or communication_type == CommunicationType.CURRENT_ACTION
+    ):
         node_feature_dim += 1
     nodes = jnp.zeros(
         (
@@ -201,7 +204,10 @@ def get_init_communication_message(config: MAPPOConfig, env, ac_init_h_state):
     initial_communication_message = jnp.asarray([])
     if communication_type == CommunicationType.HIDDEN_STATE:
         initial_communication_message = ac_init_h_state
-    elif communication_type == CommunicationType.PAST_ACTION:
+    elif (
+        communication_type == CommunicationType.PAST_ACTION
+        or communication_type == CommunicationType.CURRENT_ACTION
+    ):
         initial_communication_message = jnp.full(
             (config.derived_values.num_actors, 1), -1
         )
@@ -329,12 +335,6 @@ def _env_step(
             num_env, env.num_agents, *last_communication_message.shape[1:]
         )
 
-    log_env_state = log_env_state.replace(
-        env_state=log_env_state.env_state.replace(
-            agent_communication_message=agent_communication_message
-        )
-    )
-
     # SELECT ACTION
     rng, _rng = jax.random.split(rng)
     obs_batch = batchify(last_obs, env.agent_labels, config.derived_values.num_actors)
@@ -351,6 +351,17 @@ def _env_step(
         )
     )
     action = pi.sample(seed=_rng)
+
+    if communication_type == CommunicationType.CURRENT_ACTION:
+        agent_communication_message = action.reshape(
+            num_env, env.num_agents, *last_communication_message.shape[1:]
+        )
+    log_env_state = log_env_state.replace(
+        env_state=log_env_state.env_state.replace(
+            agent_communication_message=agent_communication_message
+        )
+    )
+
     log_prob = pi.log_prob(action)
     env_act = unbatchify(action, env.agent_labels, num_env, env.num_agents)
     # VALUE
@@ -392,7 +403,10 @@ def _env_step(
 
     if communication_type == CommunicationType.HIDDEN_STATE:
         last_communication_message = ac_h_state
-    elif communication_type == CommunicationType.PAST_ACTION:
+    elif (
+        communication_type == CommunicationType.PAST_ACTION
+        or communication_type == CommunicationType.CURRENT_ACTION
+    ):
         last_communication_message = action.squeeze()[..., None]
 
     transition = Transition(
