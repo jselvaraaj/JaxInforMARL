@@ -2,6 +2,7 @@ from abc import abstractmethod, ABC
 from functools import partial
 
 import jax
+from jaxtyping import Float, Array
 
 from .schema import (
     PRNGKey,
@@ -11,6 +12,7 @@ from .schema import (
     EntityLabel,
     MultiAgentObservation,
     MultiAgentGraph,
+    AgentIndex,
 )
 from .spaces import Space
 
@@ -75,11 +77,21 @@ class MultiAgentEnv(ABC):
         )
 
     @abstractmethod
-    def reset(self, key: PRNGKey):
+    def reset(
+        self,
+        key: PRNGKey,
+        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+    ):
         """Performs resetting of the environment."""
 
     @abstractmethod
-    def _step(self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentAction):
+    def _step(
+        self,
+        key: PRNGKey,
+        state: MultiAgentState,
+        actions: MultiAgentAction,
+        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+    ):
         """Environment-specific step transition."""
 
     @partial(jax.jit, static_argnums=(0,))
@@ -88,15 +100,20 @@ class MultiAgentEnv(ABC):
         key: PRNGKey,
         state: MultiAgentState,
         actions: MultiAgentAction,
+        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ):
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.
         """
 
-        obs, graph, state, reward, done, info = self._step(key, state, actions)
+        obs, graph, state, reward, done, info = self._step(
+            key, state, actions, agent_communication_message
+        )
         key, key_reset = jax.random.split(key)
 
-        obs_reset, graph_reset, states_reset = self.reset(key_reset)
+        obs_reset, graph_reset, states_reset = self.reset(
+            key_reset, agent_communication_message
+        )
 
         # Auto-reset environment based on termination
         state = jax.tree.map(

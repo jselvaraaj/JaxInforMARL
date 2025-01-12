@@ -46,6 +46,7 @@ class MPEState(MultiAgentState, struct.PyTreeNode):
     entity_positions: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
     entity_velocities: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
     did_agent_die_this_time_step: Float[Array, f"{AgentIndex}"]
+    agent_communication_message: Float[Array, f"{AgentIndex} ..."]
 
 
 class TargetMPEEnvironment(MultiAgentEnv):
@@ -216,7 +217,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
     @partial(jax.jit, static_argnums=[0])
     def reset(
-        self, key: PRNGKey
+        self,
+        key: PRNGKey,
+        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MPEState]:
         """Initialise with random positions"""
 
@@ -241,6 +244,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             dones=jnp.full(self.num_agents, False),
             step=0,
             did_agent_die_this_time_step=jnp.full(self.num_agents, False),
+            agent_communication_message=agent_communication_message,
         )
         obs = self.get_observation(state)
         graph = self.get_graph(state)
@@ -521,6 +525,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         key: PRNGKey,
         state: MPEState,
         actions: MultiAgentAction,
+        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,

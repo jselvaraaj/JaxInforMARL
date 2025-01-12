@@ -264,7 +264,7 @@ def _env_step(
         rng,
     ) = runner_state
 
-    # SELECT ACTION
+    # SELECT ACTIONx
     rng, _rng = jax.random.split(rng)
     obs_batch = batchify(last_obs, env.agent_labels, config.derived_values.num_actors)
     graph_batch = batchify_graph(last_graph, env.agent_labels_to_index)
@@ -275,7 +275,9 @@ def _env_step(
         last_done[jnp.newaxis, :],
     )
     ac_h_state, pi = actor_apply_cast(
-        actor_network.apply(train_states[0].params, h_states[0], ac_in)
+        actor_network.apply(
+            train_states.actor_train_state.params, h_states.actor_hidden_state, ac_in
+        )
     )
     action = pi.sample(seed=_rng)
     log_prob = pi.log_prob(action)
@@ -291,7 +293,9 @@ def _env_step(
         last_done[jnp.newaxis, :],
     )
     cr_h_state, value = critic_apply_cast(
-        critic_network.apply(train_states[1].params, h_states[1], cr_in)
+        critic_network.apply(
+            train_states.critic_train_state.params, h_states.critic_hidden_state, cr_in
+        )
     )
 
     # STEP ENV
@@ -511,7 +515,7 @@ def ppo_single_update(
     # COLLECT TRAJECTORIES
     runner_state, update_steps = update_runner_state
 
-    initial_h_states = runner_state[-2]
+    initial_h_states = runner_state.hidden_states
     _env_step_with_static_args = partial(
         _env_step,
         StaticVariables(env, config, actor_network, critic_network),
@@ -535,7 +539,9 @@ def ppo_single_update(
         last_done[np.newaxis, :],
     )
     _, last_val = critic_apply_cast(
-        critic_network.apply(train_states[1].params, h_states[1], cr_in)
+        critic_network.apply(
+            train_states.critic_train_state.params, h_states.critic_hidden_state, cr_in
+        )
     )
     last_val = last_val.squeeze()
 
@@ -586,10 +592,10 @@ def ppo_single_update(
     loss_info["ratio_0"] = loss_info["ratio"].at[0, 0].get()
     loss_info = jax.tree.map(lambda x: x.mean(), loss_info)
 
-    train_states = update_state[0]
+    train_states = update_state.network_train_states
     metric = traj_batch.info
     metric["loss"] = loss_info
-    rng = update_state[-1]
+    rng = update_state.rng_keys
 
     def callback(metric):
         out = metric["actor_network"]
@@ -628,7 +634,7 @@ def ppo_single_update(
 
     metric["update_steps"] = update_steps
     metric["actor_network"] = {
-        "actor_train_params": train_states[0].params,
+        "actor_train_params": train_states.actor_train_state.params,
     }
     jax.experimental.io_callback(callback, None, metric)
     update_steps += 1
