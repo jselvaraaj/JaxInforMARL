@@ -25,3 +25,17 @@
 
 It is recommended to first install either `requirements_jax_cpu.txt` or `requirements_jax_cuda.txt` before
 `requirements.txt` since the packages in `requirements` will install a jax version for you.
+
+# Citing JaxInfoMARL
+
+If you use JaxInfoMARL in your work, please cite as follows:
+
+```
+@software{JaxInforMARL,
+      title={JaxInforMARL: Multi-Agent Target MPE RL Environments with GNNs in JAX},
+      author={Joseph Selvaraaj},
+      year = {2025},
+      url = {https://github.com/jselvaraaj/JaxInforMARL},
+      version = {1.0.0}
+    }
+```
