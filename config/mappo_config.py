@@ -15,12 +15,12 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 6
-            max_steps = 50
+            num_agents = 10
+            max_steps = 200
             dist_to_goal_reward_ratio = 0.30
-            agent_visibility_radius = 1.5
+            agent_visibility_radius = 1
             agent_max_speed = -1
-            entities_initial_coord_radius = 2.5
+            entities_initial_coord_radius = 10
             entity_acceleration = 5
             one_time_death_reward = 5
 

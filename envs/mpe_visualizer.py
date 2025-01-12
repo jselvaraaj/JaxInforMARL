@@ -1,9 +1,13 @@
+from functools import partial
 from typing import Optional
 
+import jax
+import jax.numpy as jnp
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from jaxtyping import Int, Array
 
 # Before creating your figure:
 sns.set_theme(style="dark", context="talk")  # or "darkgrid", "ticks", etc.
@@ -19,7 +23,7 @@ class MPEVisualizer(object):
     def __init__(
         self,
         env: TargetMPEEnvironment,
-        state_seq: list[MPEState],
+        state_seq: MPEState,
         config: MAPPOConfig,
         reward_seq=None,
     ):
@@ -35,6 +39,9 @@ class MPEVisualizer(object):
         self.entity_artists = []
         self.visibility_circle = []
         self.step_counter = None
+        self.collision_counter_text = None
+        self.death_counter_text = None
+        self.collision_counter = 0
 
         self.config = config
 
@@ -51,7 +58,7 @@ class MPEVisualizer(object):
         ani = animation.FuncAnimation(
             self.fig,
             self.update,
-            frames=len(self.state_seq),
+            frames=self.state_seq.dones.shape[0],
             blit=False,
             interval=self.interval,
         )
@@ -65,13 +72,18 @@ class MPEVisualizer(object):
     def init_render(self):
         from matplotlib.patches import Circle
 
-        state = self.state_seq[0]
+        state = self.state_seq.replace(
+            entity_positions=self.state_seq.entity_positions[0],
+            step=self.state_seq.step[0],
+        )
+
+        # state = self.state_seq[0]
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(5, 5))
 
         sns.despine(ax=self.ax)
 
-        ax_lim = self.config.env_config.EnvKwArgs.entities_initial_coord_radius + 1
+        ax_lim = self.config.env_config.EnvKwArgs.entities_initial_coord_radius + 2
 
         self.ax.set_xlim([-ax_lim, ax_lim])
         self.ax.set_ylim([-ax_lim, ax_lim])
@@ -151,19 +163,78 @@ class MPEVisualizer(object):
             )
 
             self.labels.append(circle_text)
+        fontsize = 10
+        text_spacing = ax_lim / 10
 
         self.step_counter = self.ax.text(
-            -(ax_lim - 0.05), (ax_lim - 0.05), f"Step: {state.step}", va="top"
+            -(ax_lim - 0.05),
+            (ax_lim - 0.05),
+            f"Step: {state.step}",
+            va="top",
+            fontsize=fontsize,
+        )
+
+        num_collisions, num_agent_died = self.get_stats(state)
+        self.collision_counter += num_collisions
+        self.collision_counter_text = self.ax.text(
+            -(ax_lim - 0.05),
+            (ax_lim - text_spacing - 0.05),
+            f"Collisions: {num_collisions}",
+            va="top",
+            fontsize=fontsize,
+        )
+        self.death_counter_text = self.ax.text(
+            -(ax_lim - 0.05),
+            (ax_lim - 2 * text_spacing - 0.05),
+            f"Num deaths: {num_agent_died}",
+            va="top",
+            fontsize=fontsize,
         )
 
     def update(self, frame):
-        state = self.state_seq[frame]
+        state = self.state_seq.replace(
+            entity_positions=self.state_seq.entity_positions[frame],
+            step=self.state_seq.step[frame],
+        )
         for i, c in enumerate(self.entity_artists):
             c.center = state.entity_positions[i]
         for i, c in enumerate(self.visibility_circle):
             c.center = state.entity_positions[i]
         for i, l in enumerate(self.labels):
             l.set_position(state.entity_positions[i])
+
+        num_collisions, num_agent_died = self.get_stats(state)
+        self.collision_counter += num_collisions
+
         self.step_counter.set_text(f"Step: {state.step}")
+        self.collision_counter_text.set_text(f"Collisions: {self.collision_counter}")
+        self.death_counter_text.set_text(f"Num deaths: {num_agent_died}")
 
         return self.entity_artists + [self.step_counter]
+
+    @partial(jax.jit, static_argnums=(0,))
+    def get_stats(self, state):
+        num_collisions = (
+            jnp.sum(
+                self._collisions(self.env.agent_indices, self.env.agent_indices, state)
+            )
+            / 2
+        )
+
+        num_agent_died = jnp.sum(
+            jax.vmap(self.env.is_there_overlap, in_axes=(0, 0, None))(
+                self.env.agent_indices, self.env.landmark_indices, state
+            )
+        )
+        return num_collisions, num_agent_died
+
+    @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.vmap, in_axes=(None, 0, None, None))
+    def _collisions(
+        self, agent_idx: Int[Array, "..."], other_idx: Int[Array, "..."], state
+    ):
+        return jax.vmap(self.env.is_collision, in_axes=(None, 0, None))(
+            agent_idx,
+            other_idx,
+            state,  # type: ignore
+        )

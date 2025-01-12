@@ -1,4 +1,5 @@
 import os
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -65,29 +66,27 @@ def get_restored_actor(artifact_name):
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v139"
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v145"
     config, actor, restored_params, actor_init_hidden_state, env = get_restored_actor(
         artifact_name
     )
+    env = env._env._env
 
     max_steps = config.env_config.kwargs.max_steps
     key = jax.random.PRNGKey(0)
     key, key_r = jax.random.split(key, 2)
 
-    num_agents = config.env_config.kwargs.num_agents
-    env = env._env._env
-
     obs, graph, state = env.reset(key_r)
 
     hidden_state = actor_init_hidden_state
-    state_seq = []
-    for _ in range(max_steps):
+
+    def env_step(key, env, runner_state, unused):
+
+        state, obs, graph, hidden_state = runner_state
+
         key, key_env, key_actor = jax.random.split(key, 3)
 
-        state_seq.append(state)
-
         obs = jnp.stack(list(obs.values()))[None]
-        # dones = jnp.repeat(state.dones[None], num_agents, axis=0)
         dones = state.dones[None, ...]
 
         graph = jax.tree.map(lambda x: x[None, ...], graph)
@@ -100,11 +99,20 @@ if __name__ == "__main__":
         action = pi.sample(seed=key_actor).squeeze()
 
         action = {
-            agent_label: action[env.agent_labels_to_index[agent_label]].item()
+            agent_label: action[env.agent_labels_to_index[agent_label]]
             for agent_label in env.agent_labels
         }
 
-        obs, graph, state, rew, _, _ = env.step(key_env, state, action)
+        obs, graph, state, _, _, _ = env.step(key_env, state, action)
+
+        runner_state = (state, obs, graph, hidden_state)
+
+        return runner_state, state
+
+    env_step = partial(env_step, key, env)
+
+    runner_state = (state, obs, graph, hidden_state)
+    runner_state, state_seq = jax.lax.scan(env_step, runner_state, None, max_steps)
 
     viz = MPEVisualizer(env, state_seq, config)
 
