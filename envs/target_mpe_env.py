@@ -500,13 +500,17 @@ class TargetMPEEnvironment(MultiAgentEnv):
         )
         all_forces = self._add_environment_force(all_forces, state)
 
+        can_entity_move = jnp.concatenate(
+            [can_agent_move, self.is_moveable[self.num_agents :]]
+        )
+
         # integrate physical state
         entity_positions, entity_velocities = self._integrate_state(
             all_forces,
             state.entity_positions,
             state.entity_velocities,
             self.entity_mass,
-            self.is_moveable,
+            can_entity_move,
             self.entity_max_speed,
         )
 
