@@ -106,6 +106,6 @@ if __name__ == "__main__":
 
         obs, graph, state, rew, _, _ = env.step(key_env, state, action)
 
-    viz = MPEVisualizer(env, state_seq)
+    viz = MPEVisualizer(env, state_seq, config)
 
     viz.animate(view=True)

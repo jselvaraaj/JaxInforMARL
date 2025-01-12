@@ -547,6 +547,23 @@ class TargetMPEEnvironment(MultiAgentEnv):
             state.did_agent_die_this_time_step ^ is_agent_dead
         )
 
+        agent_positions = jnp.where(
+            did_agent_die_this_time_step[..., None],
+            entity_positions[self.num_agents :],
+            entity_positions[: self.num_agents],
+        )
+
+        agent_velocities = jnp.where(
+            did_agent_die_this_time_step[..., None],
+            entity_velocities[self.num_agents :],
+            entity_velocities[: self.num_agents],
+        )
+
+        entity_positions = entity_positions.at[: self.num_agents].set(agent_positions)
+        entity_velocities = entity_velocities.at[: self.num_agents].set(
+            agent_velocities
+        )
+
         state = MPEState(
             entity_positions=entity_positions,
             entity_velocities=entity_velocities,
