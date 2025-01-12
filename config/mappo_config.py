@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from enum import Enum
+
 from beartype import beartype
 from flax import struct
+
+
+class CommunicationType(Enum):
+    HIDDEN_STATE = 1
+    PAST_ACTION = 2
 
 
 @beartype
@@ -17,13 +24,13 @@ class MAPPOConfig(struct.PyTreeNode):
 
             num_agents = 3
             max_steps = 25
-            dist_to_goal_reward_ratio = 0.30
-            agent_visibility_radius = 1
+            dist_to_goal_reward_ratio = 0.35
+            agent_visibility_radius = 1.5
             agent_max_speed = -1
             entities_initial_coord_radius = 10
             entity_acceleration = 5
-            one_time_death_reward = 5
-            use_hidden_state_in_node_feature = False
+            one_time_death_reward = 20
+            agent_communication_type = CommunicationType.PAST_ACTION
 
         env_cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()
@@ -43,7 +50,7 @@ class MAPPOConfig(struct.PyTreeNode):
             clip_eps = 0.2
             is_clip_eps_per_env = False
             max_grad_norm = 0.5
-            num_steps_per_update = 128
+            num_steps_per_update = 32
             num_minibatches_actors = 4
             update_epochs = 4
 
@@ -57,7 +64,7 @@ class MAPPOConfig(struct.PyTreeNode):
             gamma: discount factor.
         """
 
-        seed = 1
+        seed = 0
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
@@ -134,7 +141,9 @@ class MAPPOConfig(struct.PyTreeNode):
 
 
 def config_to_dict(config):
-    is_primitive_type = lambda obj: isinstance(obj, (int, float, str, bool, type(None)))
+    is_primitive_type = lambda obj: isinstance(
+        obj, (int, float, str, bool, type(None), CommunicationType)
+    )
     return {
         attr: (
             getattr(config, attr)

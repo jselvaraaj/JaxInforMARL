@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax import struct
 from jaxtyping import Float, Array, Int, Bool
 
+from config.mappo_config import CommunicationType
 from .default_env_config import (
     DISCRETE_ACT,
     MAX_STEPS,
@@ -75,7 +76,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         entity_acceleration=1,
         entities_initial_coord_radius=1,
         one_time_death_reward=2,
-        use_hidden_state_in_node_feature=False,
+        agent_communication_type=None,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -91,7 +92,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.entity_indices = jnp.arange(self.num_entities)
         self.landmark_indices = jnp.arange(self.num_agents, self.num_entities)
 
-        self.use_hidden_state_in_node_feature = use_hidden_state_in_node_feature
+        self.agent_communication_type = agent_communication_type
 
         self.agent_entity_type = 0
         self.landmark_entity_type = 1
@@ -283,12 +284,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
     @partial(jax.jit, static_argnums=[0])
     def get_graph(self, state: MPEState) -> MultiAgentGraph:
-        landmark_communication_message = jnp.zeros_like(
-            state.agent_communication_message
-        )
-        communication_message = jnp.concatenate(
-            [state.agent_communication_message, landmark_communication_message]
-        )
+
+        if self.agent_communication_type == CommunicationType.HIDDEN_STATE:
+            landmark_communication_message = jnp.zeros_like(
+                state.agent_communication_message
+            )
+            communication_message = jnp.concatenate(
+                [state.agent_communication_message, landmark_communication_message]
+            )
 
         @partial(jax.vmap, in_axes=(None, 0))
         @partial(jax.vmap, in_axes=(0, None))
@@ -307,26 +310,20 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 self.agent_entity_type,
                 self.landmark_entity_type,
             )
-            if self.use_hidden_state_in_node_feature:
-                node_feature = jnp.concatenate(
+            node_communication_message = jnp.asarray([])
+            if self.agent_communication_type == CommunicationType.HIDDEN_STATE:
+                node_communication_message = communication_message[entity_idx]
+            return jnp.concatenate(
+                (
                     [
-                        communication_message[entity_idx],
+                        node_communication_message,
                         state.entity_positions[entity_idx],
                         state.entity_velocities[entity_idx],
                         goal_relative_coord,
                         jnp.array([entity_type]),
-                    ],
-                )
-            else:
-                node_feature = jnp.concatenate(
-                    [
-                        state.entity_positions[entity_idx],
-                        state.entity_velocities[entity_idx],
-                        goal_relative_coord,
-                        jnp.array([entity_type]),
-                    ],
-                )
-            return node_feature
+                    ]
+                ),
+            )
 
         ### 2) Compute pairwise distances in one shot
         # agent_positions shape: (num_agents, 2)

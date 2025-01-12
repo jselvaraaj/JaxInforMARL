@@ -20,7 +20,11 @@ from jax import block_until_ready
 from jaxtyping import Array, jaxtyped
 
 import envs
-from config.mappo_config import MAPPOConfig as MAPPOConfig, config_to_dict
+from config.mappo_config import (
+    MAPPOConfig as MAPPOConfig,
+    config_to_dict,
+    CommunicationType,
+)
 from envs.multiagent_env import MultiAgentEnv
 from envs.schema import MultiAgentGraph, MultiAgentObservation, PRNGKey
 from envs.target_mpe_env import GraphsTupleWithAgentIndex
@@ -109,8 +113,11 @@ def make_env_from_config(config: MAPPOConfig):
 def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
     node_feature_dim = 7
-    if config.env_config.kwargs.use_hidden_state_in_node_feature:
+    communication_type = config.env_config.kwargs.agent_communication_type
+    if communication_type == CommunicationType.HIDDEN_STATE:
         node_feature_dim += config.network.gru_hidden_dim
+    elif communication_type == CommunicationType.PAST_ACTION:
+        node_feature_dim += env.num_agents
     nodes = jnp.zeros(
         (
             num_env,
@@ -273,19 +280,22 @@ def _env_step(
     ac_h_state = jnp.where(
         last_done[..., None], ac_init_h_state, h_states.actor_hidden_state
     )
-
     h_states = h_states._replace(actor_hidden_state=ac_h_state)
 
-    agent_communication_message = ac_h_state.reshape(
-        num_env, env.num_agents, *ac_h_state.shape[1:]
-    )
+    communication_type = config.env_config.kwargs.agent_communication_type
+    initial_agent_communication_message = jnp.asarray([])
+    agent_communication_message = initial_agent_communication_message
+    if communication_type == CommunicationType.HIDDEN_STATE:
+        initial_agent_communication_message = ac_init_h_state.reshape(
+            num_env, env.num_agents, *ac_init_h_state.shape[1:]
+        )
+        agent_communication_message = ac_h_state.reshape(
+            num_env, env.num_agents, *ac_h_state.shape[1:]
+        )
     log_env_state = log_env_state.replace(
         env_state=log_env_state.env_state.replace(
             agent_communication_message=agent_communication_message
         )
-    )
-    initial_agent_communication_message = ac_init_h_state.reshape(
-        num_env, env.num_agents, *ac_init_h_state.shape[1:]
     )
 
     # SELECT ACTION
@@ -325,13 +335,18 @@ def _env_step(
     # STEP ENV
     rng, _rng = jax.random.split(rng)
     rng_step = jax.random.split(_rng, num_env)
-    obs_v, graph_v, log_env_state, reward, done, info = jax.vmap(
-        env.step, in_axes=(0, 0, 0, 0)
-    )(
+    env_input = (
         rng_step,
         log_env_state,
         env_act,
         initial_agent_communication_message,
+    )
+    env_in_axes = jax.tree.map(lambda leaf: 0 if leaf.size != 0 else None, env_input)
+    obs_v, graph_v, log_env_state, reward, done, info = jax.vmap(
+        env.step,
+        in_axes=env_in_axes,
+    )(
+        *env_input,
     )
     info = jax.tree.map(lambda x: x.reshape(config.derived_values.num_actors), info)
     done_batch = batchify(
@@ -772,14 +787,21 @@ def make_train(config: MAPPOConfig):
         cr_init_h_state = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
+        communication_type = config.env_config.kwargs.agent_communication_type
 
-        initial_agent_communication_message = ac_init_h_state.reshape(
-            num_env, env.num_agents, *ac_init_h_state.shape[1:]
-        )
+        initial_agent_communication_message = jnp.asarray([])
+        if communication_type == CommunicationType.HIDDEN_STATE:
+            initial_agent_communication_message = ac_init_h_state.reshape(
+                num_env, env.num_agents, *ac_init_h_state.shape[1:]
+            )
 
-        obs_v, graph_v, env_state = jax.vmap(env.reset, in_axes=(0, 0))(
-            reset_rng, initial_agent_communication_message
-        )
+        obs_v, graph_v, env_state = jax.vmap(
+            env.reset,
+            in_axes=(
+                0,
+                0 if initial_agent_communication_message.size != 0 else None,
+            ),
+        )(reset_rng, initial_agent_communication_message)
 
         rng, _rng = jax.random.split(rng)
         actor_critic_train_states = ActorAndCriticTrainStates(

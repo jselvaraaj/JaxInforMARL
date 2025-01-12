@@ -62,21 +62,21 @@ def get_restored_actor(artifact_name):
 
     restored_actor_params = raw_restored["actor_train_params"]
 
-    return config, actor_network, restored_actor_params, ac_init_h_state, env
+    return config, actor_network, restored_actor_params, ac_init_h_state, env, rng
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v145"
-    config, actor, restored_params, actor_init_hidden_state, env = get_restored_actor(
-        artifact_name
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v163"
+    config, actor, restored_params, actor_init_hidden_state, env, rng = (
+        get_restored_actor(artifact_name)
     )
     env = env._env._env
 
     max_steps = config.env_config.kwargs.max_steps
-    key = jax.random.PRNGKey(0)
+    key = rng
     key, key_r = jax.random.split(key, 2)
 
-    obs, graph, state = env.reset(key_r)
+    obs, graph, state = env.reset(key_r, actor_init_hidden_state)
 
     hidden_state = actor_init_hidden_state
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
             for agent_label in env.agent_labels
         }
 
-        obs, graph, state, _, _, _ = env.step(key_env, state, action)
+        obs, graph, state, _, _, _ = env.step(key_env, state, action, hidden_state)
 
         runner_state = (state, obs, graph, hidden_state)
 
