@@ -22,15 +22,16 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 3
-            max_steps = 25
-            dist_to_goal_reward_ratio = 0.35
+            num_agents = 10
+            max_steps = 50
+            dist_to_goal_reward_ratio = 0.30
             agent_visibility_radius = 1.5
             agent_max_speed = -1
-            entities_initial_coord_radius = 10
+            entities_initial_coord_radius = 2.5
             entity_acceleration = 5
             one_time_death_reward = 20
             agent_communication_type = CommunicationType.PAST_ACTION
+            agent_control_noise_std = 0.2
 
         env_cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()
@@ -50,7 +51,7 @@ class MAPPOConfig(struct.PyTreeNode):
             clip_eps = 0.2
             is_clip_eps_per_env = False
             max_grad_norm = 0.5
-            num_steps_per_update = 32
+            num_steps_per_update = 256
             num_minibatches_actors = 4
             update_epochs = 4
 
@@ -68,32 +69,32 @@ class MAPPOConfig(struct.PyTreeNode):
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 4
+        num_envs = 1
         gamma = 0.99
-        total_timesteps = 1e4
+        total_timesteps = 2e6
         ppo_config = PPOConfig()
 
     class NetworkConfig(struct.PyTreeNode):
-        fc_dim_size = 8
-        gru_hidden_dim = 8
+        fc_dim_size = 64
+        gru_hidden_dim = 64
 
-        actor_num_hidden_linear_layer = 2
-        critic_num_hidden_linear_layer = 2
+        actor_num_hidden_linear_layer = 4
+        critic_num_hidden_linear_layer = 4
 
         entity_type_embedding_dim = 4
 
         num_graph_attn_layers = 1
-        num_heads_per_attn_layer = 2
+        num_heads_per_attn_layer = 4
         graph_attention_key_dim = 8
 
-        graph_num_linear_layer = 2
-        graph_hidden_feature_dim = 8
+        graph_num_linear_layer = 4
+        graph_hidden_feature_dim = 32
 
     class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"
         project = "JaxInforMARL"
-        mode = "disabled"
-        save_model = False
+        mode = "online"
+        save_model = True
         checkpoint_model_every_update_steps = 1e2
 
     class DerivedValues(struct.PyTreeNode):

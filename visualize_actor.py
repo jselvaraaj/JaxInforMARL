@@ -9,8 +9,9 @@ from algorithm.marl_ppo import (
     make_env_from_config,
     batchify_graph,
     get_actor_init_input,
+    get_init_communication_message,
 )
-from config.mappo_config import MAPPOConfig
+from config.mappo_config import MAPPOConfig, CommunicationType
 from envs.mpe_visualizer import MPEVisualizer
 from model.actor_critic_rnn import GraphAttentionActorRNN
 
@@ -30,6 +31,10 @@ def get_restored_actor(artifact_name):
     actor_network = GraphAttentionActorRNN(num_actions, config=config)
 
     ac_init_x, ac_init_h_state, graph_init = get_actor_init_input(config, env)
+
+    _, initial_communication_message_env_input = get_init_communication_message(
+        config, env, ac_init_h_state
+    )
 
     actor_network_params = actor_network.init(_rng_actor, ac_init_h_state, ac_init_x)
 
@@ -62,27 +67,45 @@ def get_restored_actor(artifact_name):
 
     restored_actor_params = raw_restored["actor_train_params"]
 
-    return config, actor_network, restored_actor_params, ac_init_h_state, env, rng
+    return (
+        config,
+        actor_network,
+        restored_actor_params,
+        ac_init_h_state,
+        env,
+        initial_communication_message_env_input,
+        rng,
+    )
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v163"
-    config, actor, restored_params, actor_init_hidden_state, env, rng = (
-        get_restored_actor(artifact_name)
-    )
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v169"
+    (
+        config,
+        actor,
+        restored_params,
+        actor_init_hidden_state,
+        env,
+        initial_communication_message_env_input,
+        rng,
+    ) = get_restored_actor(artifact_name)
     env = env._env._env
 
     max_steps = config.env_config.kwargs.max_steps
     key = rng
     key, key_r = jax.random.split(key, 2)
 
-    obs, graph, state = env.reset(key_r, actor_init_hidden_state)
+    obs, graph, state = env.reset(key_r, initial_communication_message_env_input[0])
 
     hidden_state = actor_init_hidden_state
 
     def env_step(key, env, runner_state, unused):
 
-        state, obs, graph, hidden_state = runner_state
+        state, obs, graph, hidden_state, last_communication_message = runner_state
+
+        communication_type = config.env_config.kwargs.agent_communication_type
+
+        state = state.replace(agent_communication_message=last_communication_message)
 
         key, key_env, key_actor = jax.random.split(key, 3)
 
@@ -96,24 +119,39 @@ if __name__ == "__main__":
         x = (obs, graph, dones)
         hidden_state, pi = actor.apply(restored_params, hidden_state, x)
 
-        action = pi.sample(seed=key_actor).squeeze()
+        action_by_index = pi.sample(seed=key_actor).squeeze()
 
         action = {
-            agent_label: action[env.agent_labels_to_index[agent_label]]
+            agent_label: action_by_index[env.agent_labels_to_index[agent_label]]
             for agent_label in env.agent_labels
         }
 
-        obs, graph, state, _, _, _ = env.step(key_env, state, action, hidden_state)
+        obs, graph, state, _, _, _ = env.step(
+            key_env, state, action, last_communication_message
+        )
 
-        runner_state = (state, obs, graph, hidden_state)
+        if communication_type == CommunicationType.HIDDEN_STATE:
+            last_communication_message = hidden_state
+        elif communication_type == CommunicationType.PAST_ACTION:
+            last_communication_message = action_by_index.squeeze()[..., None]
+
+        runner_state = (state, obs, graph, hidden_state, last_communication_message)
 
         return runner_state, state
 
     env_step = partial(env_step, key, env)
 
-    runner_state = (state, obs, graph, hidden_state)
-    runner_state, state_seq = jax.lax.scan(env_step, runner_state, None, max_steps)
+    runner_state = (
+        state,
+        obs,
+        graph,
+        hidden_state,
+        initial_communication_message_env_input[0],
+    )
+    with jax.disable_jit(False):
+        runner_state, state_seq = jax.lax.scan(env_step, runner_state, None, max_steps)
 
-    viz = MPEVisualizer(env, state_seq, config)
+    with jax.disable_jit(False):
+        viz = MPEVisualizer(env, state_seq, config)
 
-    viz.animate(view=True)
+        viz.animate(view=True)

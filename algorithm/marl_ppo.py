@@ -193,6 +193,32 @@ def get_actor_init_input(config: MAPPOConfig, env):
     return ac_init_x, ac_init_h_state, graph_init
 
 
+def get_init_communication_message(config: MAPPOConfig, env, ac_init_h_state):
+    communication_type = config.env_config.kwargs.agent_communication_type
+
+    num_env = config.training_config.num_envs
+
+    initial_communication_message = jnp.asarray([])
+    if communication_type == CommunicationType.HIDDEN_STATE:
+        initial_communication_message = ac_init_h_state
+    elif communication_type == CommunicationType.PAST_ACTION:
+        initial_communication_message = jnp.full(
+            (config.derived_values.num_actors, 1), -1
+        )
+
+    initial_communication_message_env_input = initial_communication_message
+    if initial_communication_message_env_input.size != 0:
+        initial_communication_message_env_input = (
+            initial_communication_message_env_input.reshape(
+                num_env,
+                env.num_agents,
+                *initial_communication_message_env_input.shape[1:],
+            )
+        )
+
+    return initial_communication_message, initial_communication_message_env_input
+
+
 def critic_apply_cast(result: Any):
     return cast(
         tuple[Array, Array],
@@ -827,25 +853,10 @@ def make_train(config: MAPPOConfig):
         cr_init_h_state = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
-        communication_type = config.env_config.kwargs.agent_communication_type
 
-        initial_communication_message = jnp.asarray([])
-        if communication_type == CommunicationType.HIDDEN_STATE:
-            initial_communication_message = ac_init_h_state
-        elif communication_type == CommunicationType.PAST_ACTION:
-            initial_communication_message = jnp.full(
-                (config.derived_values.num_actors, 1), -1
-            )
-
-        initial_communication_message_env_input = initial_communication_message
-        if initial_communication_message_env_input.size != 0:
-            initial_communication_message_env_input = (
-                initial_communication_message_env_input.reshape(
-                    num_env,
-                    env.num_agents,
-                    *initial_communication_message_env_input.shape[1:],
-                )
-            )
+        initial_communication_message, initial_communication_message_env_input = (
+            get_init_communication_message(config, env, ac_init_h_state)
+        )
         obs_v, graph_v, env_state = jax.vmap(
             env.reset,
             in_axes=(

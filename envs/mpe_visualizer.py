@@ -58,9 +58,10 @@ class MPEVisualizer(object):
         ani = animation.FuncAnimation(
             self.fig,
             self.update,
-            frames=self.state_seq.dones.shape[0],
+            frames=self.state_seq.step.shape[0],
             blit=False,
             interval=self.interval,
+            cache_frame_data=False,
         )
         # Save the animation to a gif
         if save_filename is not None:
@@ -76,6 +77,7 @@ class MPEVisualizer(object):
             entity_positions=self.state_seq.entity_positions[0],
             step=self.state_seq.step[0],
         )
+        self.collision_counter = 0
 
         # state = self.state_seq[0]
 
@@ -203,6 +205,9 @@ class MPEVisualizer(object):
         for i, l in enumerate(self.labels):
             l.set_position(state.entity_positions[i])
 
+        if frame == 0:
+            self.collision_counter = 0
+
         num_collisions, num_agent_died = self.get_stats(state)
         self.collision_counter += num_collisions
 
@@ -214,9 +219,13 @@ class MPEVisualizer(object):
 
     @partial(jax.jit, static_argnums=(0,))
     def get_stats(self, state):
+        is_agent_dead = jax.vmap(self.env.is_there_overlap, in_axes=(0, 0, None))(
+            self.env.agent_indices, self.env.landmark_indices, state
+        )
         num_collisions = (
             jnp.sum(
                 self._collisions(self.env.agent_indices, self.env.agent_indices, state)
+                & ~is_agent_dead[..., None]
             )
             / 2
         )

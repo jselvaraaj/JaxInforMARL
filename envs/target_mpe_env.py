@@ -77,6 +77,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         entities_initial_coord_radius=1,
         one_time_death_reward=2,
         agent_communication_type=None,
+        agent_control_noise_std=0,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -175,7 +176,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 jnp.full(self.num_landmarks, 0.0),
             ]
         )
-        self.agent_control_noise = jnp.full(self.num_agents, 0)
+        self.agent_control_noise = jnp.full(self.num_agents, agent_control_noise_std)
         # self.communication_noise = self.velocity_noise = jnp.concatenate(
         #     [
         #         jnp.full(self.num_agents, 0),
