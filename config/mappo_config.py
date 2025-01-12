@@ -16,12 +16,13 @@ class MAPPOConfig(struct.PyTreeNode):
             """
 
             num_agents = 3
-            max_steps = 50
-            dist_to_goal_reward_ratio = 0.25
-            agent_visibility_radius = 1
+            max_steps = 25
+            dist_to_goal_reward_ratio = 0.50
+            agent_visibility_radius = 2
             agent_max_speed = -1
             entities_initial_coord_radius = 1
-            entity_acceleration = 5
+            entity_acceleration = 1
+            one_time_death_reward = 2
 
         env_cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()

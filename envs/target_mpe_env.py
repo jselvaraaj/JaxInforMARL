@@ -40,16 +40,12 @@ from .schema import (
 from .spaces import Discrete, Box
 
 
-@struct.dataclass
-class MPEState(MultiAgentState):
+class MPEState(MultiAgentState, struct.PyTreeNode):
     """Basic MPE State"""
 
     entity_positions: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
     entity_velocities: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
-    communication_messages: Float[Array, f"{AgentIndex} communication_dim"] | None = (
-        None
-    )
-    goal: int | None = None
+    did_agent_die_this_time_step: Float[Array, f"{AgentIndex}"]
 
 
 class TargetMPEEnvironment(MultiAgentEnv):
@@ -77,6 +73,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         agent_max_speed: int = 1,
         entity_acceleration=1,
         entities_initial_coord_radius=1,
+        one_time_death_reward=2,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -118,6 +115,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
             if action_type == DISCRETE_ACT
             else self._continuous_action_to_control_input
         )
+
+        self.one_time_death_reward = jnp.full((self.num_agents,), one_time_death_reward)
 
         self.observation_spaces = default(
             self.observation_spaces,
@@ -241,6 +240,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             entity_velocities=jnp.zeros((self.num_entities, self.position_dim)),
             dones=jnp.full(self.num_agents, False),
             step=0,
+            did_agent_die_this_time_step=jnp.full(self.num_agents, False),
         )
         obs = self.get_observation(state)
         graph = self.get_graph(state)
@@ -477,17 +477,21 @@ class TargetMPEEnvironment(MultiAgentEnv):
         key: PRNGKey,
         state: MPEState,
         u: Float[Array, f"{AgentIndex} {CoordinateAxisIndex}"],
+        death_mask: Bool[Array, f"{AgentIndex}"],
     ) -> [
         Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"],
         Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"],
     ]:
         # apply agent physical controls
         key_noise = jax.random.split(key, self.num_agents)
+
+        can_agent_move = self.is_moveable[: self.num_agents] & ~death_mask
+
         agents_forces = self._control_to_agents_forces(
             key_noise,
             u,
             self.agent_control_noise,
-            self.is_moveable[: self.num_agents],
+            can_agent_move,
         )
 
         # apply environment forces
@@ -525,18 +529,29 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         key, key_double_integrator = jax.random.split(key)
 
-        entity_positions, entity_velocities = self._double_integrator_dynamics(
-            key_double_integrator, state, u
+        # death masking
+        is_agent_dead = jax.vmap(self.is_there_overlap, in_axes=(0, 0, None))(
+            self.agent_indices, self.landmark_indices, state
         )
-        dones = jnp.full(self.num_agents, state.step >= self.max_steps)
+
+        entity_positions, entity_velocities = self._double_integrator_dynamics(
+            key_double_integrator, state, u, is_agent_dead
+        )
+        dones = jnp.asarray(state.step >= self.max_steps) | is_agent_dead
+
+        did_agent_die_this_time_step = (
+            state.did_agent_die_this_time_step ^ is_agent_dead
+        )
 
         state = MPEState(
             entity_positions=entity_positions,
             entity_velocities=entity_velocities,
             dones=dones,
             step=state.step + 1,
+            did_agent_die_this_time_step=did_agent_die_this_time_step,
         )
         reward = self.reward(state)
+
         observation = self.get_observation(state)
         graph = self.get_graph(state)
         dones_with_agent_label = {
@@ -587,19 +602,29 @@ class TargetMPEEnvironment(MultiAgentEnv):
             self.dist_to_goal_reward_ratio * global_dist_rew
             + (1 - self.dist_to_goal_reward_ratio) * global_agent_collision_rew
         )
+        one_time_reaching_goal_reward = jnp.sum(
+            jax.lax.select(
+                state.did_agent_die_this_time_step,
+                self.one_time_death_reward,
+                jnp.zeros_like(self.one_time_death_reward),
+            )
+        )
 
         return {
-            agent_label: global_reward
+            agent_label: global_reward + one_time_reaching_goal_reward
             for agent_label, agent_index in self.agent_labels_to_index.items()
         }
 
-    def is_collision(self, a: EntityIndex, b: EntityIndex, state: MPEState):
-        """check if two entities are colliding"""
+    def is_there_overlap(self, a: EntityIndex, b: EntityIndex, state: MPEState):
         dist_min = self.entity_radius[a] + self.entity_radius[b]
         delta_pos = state.entity_positions[a] - state.entity_positions[b]
         dist = jnp.sqrt(jnp.sum(jnp.square(delta_pos)))
+        return dist < dist_min
+
+    def is_collision(self, a: EntityIndex, b: EntityIndex, state: MPEState):
+        """check if two entities are colliding"""
         return (
-            (dist < dist_min)
+            self.is_there_overlap(a, b, state)
             & (self.can_entity_collide[a] & self.can_entity_collide[b])
             & (a != b)
         )

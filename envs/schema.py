@@ -34,8 +34,7 @@ CoordinateAxisIndex = "position_index"
 
 
 @jaxtyped(typechecker=typechecker)
-@struct.dataclass
-class MultiAgentState:
+class MultiAgentState(struct.PyTreeNode):
     dones: Bool[Array, AgentIndex]
     step: int
 

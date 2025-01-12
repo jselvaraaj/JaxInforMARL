@@ -790,9 +790,9 @@ def main():
         out = train_jit(rng)
         block_until_ready(out)
 
-    update_step_runner_state: UpdateStepRunnerState = out["runner_state"]
+    runner_state: UpdateStepRunnerState = out["runner_state"]
     out = {
-        "actor_train_params": update_step_runner_state.update_step_runner_state.network_train_states.actor_train_state.params,
+        "actor_train_params": runner_state.update_step_runner_state.network_train_states.actor_train_state.params,
         # "critic_train_state": out["runner_state"][0][0][1].params,
     }
 
