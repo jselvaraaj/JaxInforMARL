@@ -3,10 +3,10 @@
 <h2> Results </h2>
 
 <h4>Trained with 3 agent and executed with 10 agents</h4>
-<img src="https://github.com/jselvaraaj/JaxInforMARL/blob/main/100_agents.gif?raw=true" alt="10 agents" width="20%">
+<img src="https://github.com/jselvaraaj/JaxInforMARL/blob/main/10_agents.gif?raw=true" alt="10 agents" width="60%">
 
 <h4>Trained with 3 agent and executed with 100 agents</h4>
-<img src="https://github.com/jselvaraaj/JaxInforMARL/blob/main/10_agents.gif?raw=true" alt="100 agents" width="20%">
+<img src="https://github.com/jselvaraaj/JaxInforMARL/blob/main/100_agents.gif?raw=true" alt="100 agents" width="60%">
 
 <h2 name="main_scripts" id="main_scripts">Main scripts </h2>
 
