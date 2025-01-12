@@ -52,18 +52,32 @@ class ActorRNN(nn.Module):
             kernel_init=orthogonal(jnp.sqrt(2)),
             bias_init=constant(0.0),
         )(obs)
+        embedding = nn.LayerNorm(
+            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
+        )(embedding)
         embedding = nn.relu(embedding)
 
         rnn_in = (embedding, dones)
         hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        for _ in range(self.config.network.actor_num_hidden_linear_layer):
+        for _ in range(self.config.network.actor_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
                 self.config.network.gru_hidden_dim,
                 kernel_init=orthogonal(2),
                 bias_init=constant(0.0),
             )(embedding)
             embedding = nn.relu(embedding)
+
+        embedding = nn.Dense(
+            self.config.network.gru_hidden_dim,
+            kernel_init=orthogonal(2),
+            bias_init=constant(0.0),
+        )(embedding)
+        embedding = nn.LayerNorm(
+            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
+        )(embedding)
+        embedding = nn.relu(embedding)
+
         actor_mean = embedding
 
         action_logits = nn.Dense(
@@ -89,13 +103,22 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         sum_n_node = nodes.shape[0]
 
         def linear_layer(x):
-            for _ in range(self.config.network.graph_num_linear_layer):
+            for _ in range(self.config.network.graph_num_linear_layer - 1):
                 x = nn.Dense(
                     self.config.network.graph_hidden_feature_dim,
                     kernel_init=orthogonal(jnp.sqrt(2)),
                     bias_init=constant(0.0),
                 )(x)
                 x = nn.relu(x)
+            x = nn.Dense(
+                self.config.network.graph_hidden_feature_dim,
+                kernel_init=orthogonal(jnp.sqrt(2)),
+                bias_init=constant(0.0),
+            )(x)
+            x = nn.LayerNorm(
+                scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
+            )(x)
+            x = nn.relu(x)
             return x
 
         def key_projection(x):
@@ -261,18 +284,31 @@ class CriticRNN(nn.Module):
             kernel_init=orthogonal(jnp.sqrt(2)),
             bias_init=constant(0.0),
         )(world_state)
+        embedding = nn.LayerNorm(
+            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
+        )(embedding)
         embedding = nn.relu(embedding)
 
         rnn_in = (embedding, dones)
         hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        for _ in range(self.config.network.critic_num_hidden_linear_layer):
+        for _ in range(self.config.network.critic_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
                 self.config.network.gru_hidden_dim,
                 kernel_init=orthogonal(2),
                 bias_init=constant(0.0),
             )(embedding)
             embedding = nn.relu(embedding)
+
+        embedding = nn.Dense(
+            self.config.network.gru_hidden_dim,
+            kernel_init=orthogonal(2),
+            bias_init=constant(0.0),
+        )(embedding)
+        embedding = nn.LayerNorm(
+            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
+        )(embedding)
+        embedding = nn.relu(embedding)
 
         critic = embedding
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(

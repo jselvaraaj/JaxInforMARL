@@ -15,12 +15,12 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 3
-            max_steps = 25
+            num_agents = 6
+            max_steps = 50
             dist_to_goal_reward_ratio = 0.50
             agent_visibility_radius = 1
             agent_max_speed = -1
-            entities_initial_coord_radius = 1
+            entities_initial_coord_radius = 2
             entity_acceleration = 5
             one_time_death_reward = 2
 
@@ -78,7 +78,7 @@ class MAPPOConfig(struct.PyTreeNode):
         num_heads_per_attn_layer = 4
         graph_attention_key_dim = 16
 
-        graph_num_linear_layer = 3
+        graph_num_linear_layer = 4
         graph_hidden_feature_dim = 32
 
     class WandbConfig(struct.PyTreeNode):
