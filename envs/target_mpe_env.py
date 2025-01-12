@@ -46,7 +46,7 @@ class MPEState(MultiAgentState, struct.PyTreeNode):
     entity_positions: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
     entity_velocities: Float[Array, f"{EntityIndex} {CoordinateAxisIndex}"]
     did_agent_die_this_time_step: Float[Array, f"{AgentIndex}"]
-    agent_communication_message: Float[Array, f"{AgentIndex} ..."]
+    agent_communication_message: Float[Array, f"{AgentIndex} ..."] | None
 
 
 class TargetMPEEnvironment(MultiAgentEnv):
@@ -75,6 +75,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         entity_acceleration=1,
         entities_initial_coord_radius=1,
         one_time_death_reward=2,
+        use_hidden_state_in_node_feature=False,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -90,10 +91,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.entity_indices = jnp.arange(self.num_entities)
         self.landmark_indices = jnp.arange(self.num_agents, self.num_entities)
 
+        self.use_hidden_state_in_node_feature = use_hidden_state_in_node_feature
+
         self.agent_entity_type = 0
         self.landmark_entity_type = 1
-
-        self.node_feature_dim = 7
 
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]
@@ -219,7 +220,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
     def reset(
         self,
         key: PRNGKey,
-        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MPEState]:
         """Initialise with random positions"""
 
@@ -244,7 +245,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             dones=jnp.full(self.num_agents, False),
             step=0,
             did_agent_die_this_time_step=jnp.full(self.num_agents, False),
-            agent_communication_message=agent_communication_message,
+            agent_communication_message=initial_agent_communication_message,
         )
         obs = self.get_observation(state)
         graph = self.get_graph(state)
@@ -282,6 +283,12 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
     @partial(jax.jit, static_argnums=[0])
     def get_graph(self, state: MPEState) -> MultiAgentGraph:
+        landmark_communication_message = jnp.zeros_like(
+            state.agent_communication_message
+        )
+        communication_message = jnp.concatenate(
+            [state.agent_communication_message, landmark_communication_message]
+        )
 
         @partial(jax.vmap, in_axes=(None, 0))
         @partial(jax.vmap, in_axes=(0, None))
@@ -300,14 +307,25 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 self.agent_entity_type,
                 self.landmark_entity_type,
             )
-            node_feature = jnp.concatenate(
-                [
-                    state.entity_positions[entity_idx],
-                    state.entity_velocities[entity_idx],
-                    goal_relative_coord,
-                    jnp.array([entity_type]),
-                ],
-            )
+            if self.use_hidden_state_in_node_feature:
+                node_feature = jnp.concatenate(
+                    [
+                        communication_message[entity_idx],
+                        state.entity_positions[entity_idx],
+                        state.entity_velocities[entity_idx],
+                        goal_relative_coord,
+                        jnp.array([entity_type]),
+                    ],
+                )
+            else:
+                node_feature = jnp.concatenate(
+                    [
+                        state.entity_positions[entity_idx],
+                        state.entity_velocities[entity_idx],
+                        goal_relative_coord,
+                        jnp.array([entity_type]),
+                    ],
+                )
             return node_feature
 
         ### 2) Compute pairwise distances in one shot
@@ -525,7 +543,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
         key: PRNGKey,
         state: MPEState,
         actions: MultiAgentAction,
-        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -575,6 +592,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             dones=dones,
             step=state.step + 1,
             did_agent_die_this_time_step=did_agent_die_this_time_step,
+            agent_communication_message=state.agent_communication_message,
         )
         reward = self.reward(state)
 

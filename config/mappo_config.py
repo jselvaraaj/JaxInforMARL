@@ -15,14 +15,15 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 6
-            max_steps = 200
+            num_agents = 3
+            max_steps = 25
             dist_to_goal_reward_ratio = 0.30
             agent_visibility_radius = 1
             agent_max_speed = -1
             entities_initial_coord_radius = 10
             entity_acceleration = 5
             one_time_death_reward = 5
+            use_hidden_state_in_node_feature = False
 
         env_cls_name = "TargetMPEEnvironment"
         kwargs = EnvKwArgs()
@@ -60,26 +61,26 @@ class MAPPOConfig(struct.PyTreeNode):
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
+        num_envs = 4
         gamma = 0.99
         total_timesteps = 1e4
         ppo_config = PPOConfig()
 
     class NetworkConfig(struct.PyTreeNode):
-        fc_dim_size = 128
-        gru_hidden_dim = 128
+        fc_dim_size = 8
+        gru_hidden_dim = 8
 
-        actor_num_hidden_linear_layer = 4
-        critic_num_hidden_linear_layer = 4
+        actor_num_hidden_linear_layer = 2
+        critic_num_hidden_linear_layer = 2
 
         entity_type_embedding_dim = 4
 
         num_graph_attn_layers = 1
-        num_heads_per_attn_layer = 4
-        graph_attention_key_dim = 16
+        num_heads_per_attn_layer = 2
+        graph_attention_key_dim = 8
 
-        graph_num_linear_layer = 5
-        graph_hidden_feature_dim = 32
+        graph_num_linear_layer = 2
+        graph_hidden_feature_dim = 8
 
     class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"

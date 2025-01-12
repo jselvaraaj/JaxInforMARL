@@ -108,11 +108,14 @@ def make_env_from_config(config: MAPPOConfig):
 
 def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
+    node_feature_dim = 7
+    if config.env_config.kwargs.use_hidden_state_in_node_feature:
+        node_feature_dim += config.network.gru_hidden_dim
     nodes = jnp.zeros(
         (
             num_env,
             env.num_entities,
-            env.node_feature_dim,
+            node_feature_dim,
         )
     )
     nodes = nodes.at[..., -1].set(1)  # entity type
@@ -256,7 +259,7 @@ def _env_step(
 
     (
         train_states,
-        env_state,
+        log_env_state,
         last_obs,
         last_graph,
         last_done,
@@ -264,7 +267,28 @@ def _env_step(
         rng,
     ) = runner_state
 
-    # SELECT ACTIONx
+    ac_init_h_state = ScannedRNN.initialize_carry(
+        config.derived_values.num_actors, config.network.gru_hidden_dim
+    )
+    ac_h_state = jnp.where(
+        last_done[..., None], ac_init_h_state, h_states.actor_hidden_state
+    )
+
+    h_states = h_states._replace(actor_hidden_state=ac_h_state)
+
+    agent_communication_message = ac_h_state.reshape(
+        num_env, env.num_agents, *ac_h_state.shape[1:]
+    )
+    log_env_state = log_env_state.replace(
+        env_state=log_env_state.env_state.replace(
+            agent_communication_message=agent_communication_message
+        )
+    )
+    initial_agent_communication_message = ac_init_h_state.reshape(
+        num_env, env.num_agents, *ac_init_h_state.shape[1:]
+    )
+
+    # SELECT ACTION
     rng, _rng = jax.random.split(rng)
     obs_batch = batchify(last_obs, env.agent_labels, config.derived_values.num_actors)
     graph_batch = batchify_graph(last_graph, env.agent_labels_to_index)
@@ -301,13 +325,19 @@ def _env_step(
     # STEP ENV
     rng, _rng = jax.random.split(rng)
     rng_step = jax.random.split(_rng, num_env)
-    obs_v, graph_v, env_state, reward, done, info = jax.vmap(
-        env.step, in_axes=(0, 0, 0)
-    )(rng_step, env_state, env_act)
+    obs_v, graph_v, log_env_state, reward, done, info = jax.vmap(
+        env.step, in_axes=(0, 0, 0, 0)
+    )(
+        rng_step,
+        log_env_state,
+        env_act,
+        initial_agent_communication_message,
+    )
     info = jax.tree.map(lambda x: x.reshape(config.derived_values.num_actors), info)
     done_batch = batchify(
         done, env.agent_labels, config.derived_values.num_actors
     ).squeeze()
+
     transition = Transition(
         jnp.tile(done["__all__"], env.num_agents),
         last_done,
@@ -322,7 +352,7 @@ def _env_step(
     )
     runner_state = EnvStepRunnerState(
         train_states,
-        env_state,
+        log_env_state,
         obs_v,
         graph_v,
         done_batch,
@@ -452,7 +482,7 @@ def _update_epoch(
 
     (
         train_states,
-        init_h_states,
+        last_ppo_step_h_state,
         traj_batch,
         advantages,
         targets,
@@ -460,15 +490,15 @@ def _update_epoch(
     ) = update_state
     rng, _rng = jax.random.split(rng)
 
-    init_h_states = jax.tree.map(
+    last_ppo_step_h_state = jax.tree.map(
         lambda x: jnp.reshape(x, (1, config.derived_values.num_actors, -1)),
-        init_h_states,
+        last_ppo_step_h_state,
     )
     # traj_batch.graph.nodes: Float[Array, "num_steps num_actors; num_entities, node_feature_dim"]
     # remember last two axis are for one graph
     batch = (
-        init_h_states[0],
-        init_h_states[1],
+        last_ppo_step_h_state.actor_hidden_state,
+        last_ppo_step_h_state.critic_hidden_state,
         traj_batch,
         advantages.squeeze(),
         targets.squeeze(),
@@ -492,7 +522,7 @@ def _update_epoch(
     train_states, loss_info = jax.lax.scan(_update_minibatch, train_states, minibatches)
     update_state = UpdateEpochState(
         train_states,
-        jax.tree.map(lambda x: x.squeeze(), init_h_states),
+        jax.tree.map(lambda x: x.squeeze(), last_ppo_step_h_state),
         traj_batch,
         advantages,
         targets,
@@ -515,7 +545,7 @@ def ppo_single_update(
     # COLLECT TRAJECTORIES
     runner_state, update_steps = update_runner_state
 
-    initial_h_states = runner_state.hidden_states
+    last_step_h_states = runner_state.hidden_states
     _env_step_with_static_args = partial(
         _env_step,
         StaticVariables(env, config, actor_network, critic_network),
@@ -580,7 +610,7 @@ def ppo_single_update(
     update_epoch_with_static_variables = partial(_update_epoch, static_variables)
     update_state = UpdateEpochState(
         train_states,
-        initial_h_states,
+        last_step_h_states,
         traj_batch,
         advantages,
         targets,
@@ -736,12 +766,19 @@ def make_train(config: MAPPOConfig):
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, num_env)
-        obs_v, graph_v, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
         ac_init_h_state = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
         )
         cr_init_h_state = ScannedRNN.initialize_carry(
             config.derived_values.num_actors, config.network.gru_hidden_dim
+        )
+
+        initial_agent_communication_message = ac_init_h_state.reshape(
+            num_env, env.num_agents, *ac_init_h_state.shape[1:]
+        )
+
+        obs_v, graph_v, env_state = jax.vmap(env.reset, in_axes=(0, 0))(
+            reset_rng, initial_agent_communication_message
         )
 
         rng, _rng = jax.random.split(rng)

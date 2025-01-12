@@ -7,6 +7,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from flax import struct
+from jaxtyping import Float, Array
 
 from envs.multiagent_env import MultiAgentEnv
 from envs.schema import (
@@ -18,6 +19,7 @@ from envs.schema import (
     Info,
     MultiAgentReward,
     MultiAgentGraph,
+    AgentIndex,
 )
 
 
@@ -37,11 +39,18 @@ class MARLWrapper(MultiAgentEnv):
         return self._env.get_observation(state)
 
     def reset(
-        self, key: PRNGKey
+        self,
+        key: PRNGKey,
+        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MultiAgentState]:
-        return self._env.reset(key)
+        return self._env.reset(key, initial_agent_communication_message)
 
-    def _step(self, key: PRNGKey, state: MultiAgentState, actions: MultiAgentAction):
+    def _step(
+        self,
+        key: PRNGKey,
+        state: MultiAgentState,
+        actions: MultiAgentAction,
+    ):
         return self._env._step(key, state, actions)
 
     def _batchify_floats(self, x: dict):
@@ -61,22 +70,30 @@ class MARLWrapper(MultiAgentEnv):
     def num_entities(self):
         return self._env.num_entities
 
-    @property
-    def node_feature_dim(self):
-        return self._env.node_feature_dim
-
 
 class MPEWorldStateWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=0)
-    def reset(self, key):
-        obs, graph, env_state = self._env.reset(key)
+    def reset(
+        self,
+        key,
+        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+    ):
+        obs, graph, env_state = self._env.reset(key, agent_communication_message)
         obs["world_state"] = self.world_state(obs)
         return obs, graph, env_state
 
     @partial(jax.jit, static_argnums=0)
-    def step(self, key, state, action):
-        obs, graph, env_state, reward, done, info = self._env.step(key, state, action)
+    def step(
+        self,
+        key,
+        state,
+        action,
+        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+    ):
+        obs, graph, env_state, reward, done, info = self._env.step(
+            key, state, action, initial_agent_communication_message
+        )
         obs["world_state"] = self.world_state(obs)
         return obs, graph, env_state, reward, done, info
 
@@ -117,9 +134,13 @@ class LogWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(
-        self, key: PRNGKey
+        self,
+        key: PRNGKey,
+        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, LogEnvState]:
-        obs, graph, env_state = self._env.reset(key)
+        obs, graph, env_state = self._env.reset(
+            key, initial_agent_communication_message
+        )
         state = LogEnvState(
             env_state,
             jnp.zeros((self._env.num_agents,)),
@@ -135,6 +156,7 @@ class LogWrapper(MARLWrapper):
         key: PRNGKey,
         state: LogEnvState,
         action: MultiAgentAction,
+        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -144,7 +166,7 @@ class LogWrapper(MARLWrapper):
         Info,
     ]:
         obs, graph, env_state, reward, done, info = self._env.step(
-            key, state.env_state, action
+            key, state.env_state, action, initial_agent_communication_message
         )
         ep_done = done["__all__"]
         new_episode_return = state.episode_returns + self._batchify_floats(reward)
@@ -176,6 +198,7 @@ class MPELogWrapper(LogWrapper):
         key: PRNGKey,
         state: LogEnvState,
         action: MultiAgentAction,
+        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -185,7 +208,7 @@ class MPELogWrapper(LogWrapper):
         Info,
     ]:
         obs, graph, env_state, reward, done, info = self._env.step(
-            key, state.env_state, action
+            key, state.env_state, action, initial_agent_communication_message
         )
         reward_log = jax.tree.map(
             lambda x: x * self._env.num_agents, reward

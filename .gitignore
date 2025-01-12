@@ -1,7 +1,5 @@
 .idea
 .vscode
-config/mappo_homogenous_rnn_mpe.yaml
-test_ppo.py
 .DS_Store
 PPO_Runner_Checkpoint
 artifacts
