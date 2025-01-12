@@ -72,10 +72,14 @@ class MAPPOConfig(struct.PyTreeNode):
         actor_num_hidden_linear_layer = 4
         critic_num_hidden_linear_layer = 4
 
-        embedding_dim = 4
-        num_graph_attn_layers = 4
-        graph_fc_dim_size = 16
-        num_heads_per_attn_layer = 2
+        entity_type_embedding_dim = 4
+
+        num_graph_attn_layers = 1
+        num_heads_per_attn_layer = 4
+        graph_attention_key_dim = 16
+
+        graph_num_linear_layer = 3
+        graph_hidden_feature_dim = 32
 
     class WandbConfig(struct.PyTreeNode):
         entity = "josssdan"

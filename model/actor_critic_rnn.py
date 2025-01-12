@@ -89,8 +89,18 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         sum_n_node = nodes.shape[0]
 
         def linear_layer(x):
+            for _ in range(self.config.network.graph_num_linear_layer):
+                x = nn.Dense(
+                    self.config.network.graph_hidden_feature_dim,
+                    kernel_init=orthogonal(jnp.sqrt(2)),
+                    bias_init=constant(0.0),
+                )(x)
+                x = nn.relu(x)
+            return x
+
+        def key_projection(x):
             return nn.Dense(
-                self.config.network.graph_fc_dim_size,
+                self.config.network.graph_attention_key_dim,
                 kernel_init=orthogonal(jnp.sqrt(2)),
                 bias_init=constant(0.0),
             )(x)
@@ -107,14 +117,16 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
         for _ in range(self.config.network.num_heads_per_attn_layer):
             # extract key for node feature to be used in attention
-            key_sent_attributes = linear_layer(sent_attributes)
-            key_received_attributes = linear_layer(received_attributes)
+            key_sent_attributes = key_projection(sent_attributes)
+            key_received_attributes = key_projection(received_attributes)
 
-            key_received_attributes = key_received_attributes + edge_features
+            key_edge_features = key_projection(edge_features)
+
+            key_received_attributes = key_received_attributes + key_edge_features
 
             softmax_logits: Float[Array, "edge_id, edge_id"] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=1
-            ) / jnp.sqrt(self.config.network.graph_fc_dim_size)
+            ) / jnp.sqrt(self.config.network.graph_attention_key_dim)
 
             # Compute the softmax weights on the entire tree.
             weights = utils.segment_softmax(
@@ -134,12 +146,8 @@ class GraphMultiHeadAttentionLayer(nn.Module):
             )
         else:
             nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=1)
-            nodes_seg_sum = linear_layer(nodes_seg_sum)
 
-        nodes = nodes_seg_sum
-
-        nodes = nn.relu(nodes)
-
+        nodes = linear_layer(nodes_seg_sum)
         return graph._replace(nodes=nodes)
 
 
@@ -171,7 +179,9 @@ class GraphStackedMultiHeadAttention(nn.Module):
 
         # Embed entity and compute node features.
         entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(2, self.config.network.embedding_dim)(entity_type)
+        entity_emb = nn.Embed(2, self.config.network.entity_type_embedding_dim)(
+            entity_type
+        )
         nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
 
         graph = jraph.GraphsTuple(
@@ -237,7 +247,9 @@ class CriticRNN(nn.Module):
 
         # Embed entity_type.
         entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(2, self.config.network.embedding_dim)(entity_type)
+        entity_emb = nn.Embed(2, self.config.network.entity_type_embedding_dim)(
+            entity_type
+        )
         nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
 
         world_state = jnp.sum(
