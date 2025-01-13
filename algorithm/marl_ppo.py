@@ -3,7 +3,6 @@ Built off JaxMARL( https://github.com/FLAIROx/JaxMARL) baselines/MAPPO/mappo_rnn
 """
 
 import os
-import pickle
 from collections import namedtuple
 from functools import partial
 from typing import NamedTuple, cast, Any
@@ -22,9 +21,9 @@ from jax import block_until_ready
 from jaxtyping import Array, jaxtyped, Float
 
 import envs
+from config.config_format_conversion import config_to_dict
 from config.mappo_config import (
     MAPPOConfig as MAPPOConfig,
-    config_to_dict,
     CommunicationType,
     TrainingConfig,
 )
@@ -767,11 +766,12 @@ def ppo_single_update(
             config.wandb.save_model
             and update_steps % config.wandb.checkpoint_model_every_update_steps == 0
         ):
+            dict_config = config_to_dict(config)
+
             model_artifact = wandb.Artifact(
-                f"PPO_RNN_Runner_State_{wandb.run.name}", type="model"
-            )
-            config_artifact = wandb.Artifact(
-                f"PPO_RNN_Runner_State_Config_{wandb.run.name}", type="config"
+                f"PPO_RNN_Runner_State_{wandb.run.name}",
+                type="model",
+                metadata=dict_config,
             )
             running_script_path = os.path.abspath(".")
             checkpoint_dir = os.path.join(
@@ -783,13 +783,7 @@ def ppo_single_update(
             orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
             model_artifact.add_dir(checkpoint_dir)
 
-            with config_artifact.new_file(
-                f"config_artifact_{progress}.pkl", mode="wb"
-            ) as f:
-                pickle.dump(config, f)
-
             wandb.log_artifact(model_artifact)
-            wandb.log_artifact(config_artifact)
         print(
             f"progress: {progress:.4f}% ; update step: {update_steps}/{config.derived_values.num_updates}"
         )
@@ -979,10 +973,7 @@ def main():
 
     if config.wandb.save_model:
         model_artifact = wandb.Artifact(
-            f"PPO_RNN_Runner_State_{wandb.run.name}", type="model"
-        )
-        config_artifact = wandb.Artifact(
-            f"PPO_RNN_Runner_State_Config_{wandb.run.name}", type="config"
+            f"PPO_RNN_Runner_State_{wandb.run.name}", type="model", metadata=dict_config
         )
         running_script_path = os.path.abspath(".")
         checkpoint_dir = os.path.join(
@@ -994,11 +985,7 @@ def main():
         orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
         model_artifact.add_dir(checkpoint_dir)
 
-        with config_artifact.new_file("config_artifact_final.pkl", mode="wb") as f:
-            pickle.dump(config, f)
-
         wandb.log_artifact(model_artifact)
-        wandb.log_artifact(config_artifact)
 
     wandb.finish()
 

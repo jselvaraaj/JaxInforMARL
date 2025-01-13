@@ -155,19 +155,3 @@ class MAPPOConfig(NamedTuple):
             wandb=wandb,
             derived_values=_derived_values,
         )
-
-
-def config_to_dict(config):
-    is_primitive_type = lambda obj: isinstance(
-        obj, (int, float, str, bool, type(None), CommunicationType, list)
-    )
-    return {
-        attr: (
-            getattr(config, attr)
-            if is_primitive_type(getattr(config, attr))
-            else config_to_dict(getattr(config, attr))
-        )
-        for attr in dir(config)
-        if not callable(getattr(config, attr))
-        and not (attr.startswith("__") or attr.startswith("_"))
-    }

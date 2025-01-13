@@ -1,5 +1,5 @@
 import os
-import pickle
+import shutil
 from functools import partial
 from pathlib import Path
 
@@ -21,26 +21,13 @@ from algorithm.marl_ppo import (
     ActorAndCriticHiddenStates,
     EnvStepRunnerState,
 )
+from config.config_format_conversion import dict_to_config
 from envs.mpe_visualizer import MPEVisualizer
 from model.actor_critic_rnn import GraphAttentionActorRNN, CriticRNN
 
 
-def get_config_from_artifact(config_artifact_name):
-    directory = config_artifact_name
-    files = os.listdir(directory)
-
-    assert len(files) == 1, f"More than one file in {config_artifact_name}"
-    file_name = files[0]
-    full_path = os.path.join(directory, file_name)
-
-    with open(full_path, "rb") as f:
-        config = pickle.load(f)
-
-    return config
-
-
-def get_restored_actor(model_artifact_name, config_artifact_name):
-    config = get_config_from_artifact(config_artifact_name)
+def get_restored_actor(model_artifact_name, config_dict):
+    config = dict_to_config(config_dict)
     env = make_env_from_config(config)
     rng = jax.random.PRNGKey(config.training_config.seed)
 
@@ -109,25 +96,21 @@ def get_restored_actor(model_artifact_name, config_artifact_name):
 
 if __name__ == "__main__":
 
-    wandb_run_name = "breezy-silence-98"
+    wandb_run_name = "vocal-glade-99"
     artifact_version = "1"
 
     model_artifact_name = (
         f"artifacts/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
     )
-    config_artifact_name = (
-        f"artifacts/PPO_RNN_Runner_State_Config_{wandb_run_name}:v{artifact_version}"
-    )
+    model_artifact_remote_name = f"josssdan/JaxInforMARL/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
+
+    api = wandb.Api()
+    model_artifact = api.artifact(model_artifact_remote_name, type="model")
+
     if not Path(model_artifact_name).is_dir():
-        model_artifact_remote_name = f"josssdan/JaxInforMARL/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
-        config_artifact_remote_name = f"josssdan/JaxInforMARL/PPO_RNN_Runner_State_Config_{wandb_run_name}:v{artifact_version}"
-
-        api = wandb.Api()
-        model_artifact = api.artifact(model_artifact_remote_name, type="model")
-        config_artifact = api.artifact(config_artifact_remote_name, type="config")
-
         model_artifact.download()
-        config_artifact.download()
+
+    config_dict = model_artifact.metadata
 
     (
         config,
@@ -141,7 +124,7 @@ if __name__ == "__main__":
         initial_communication_message_env_input,
         initial_communication_message,
         key,
-    ) = get_restored_actor(model_artifact_name, config_artifact_name)
+    ) = get_restored_actor(model_artifact_name, config_dict)
 
     max_steps = config.env_config.kwargs.max_steps
     num_env = config.training_config.num_envs
@@ -219,3 +202,5 @@ if __name__ == "__main__":
     viz = MPEVisualizer(env._env._env, traj_batch.env_state.env_state, config)
 
     viz.animate(view=True)
+
+    shutil.rmtree(model_artifact_name)
