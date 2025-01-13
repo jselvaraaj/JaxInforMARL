@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import NamedTuple
+from typing import NamedTuple, Literal
 
 from beartype import beartype
 
@@ -20,25 +20,25 @@ class EnvKwArgs(NamedTuple):
         agent_max_speed: Negative value means no maximum speed.
     """
 
-    num_agents = 3
-    max_steps = 50
-    dist_to_goal_reward_ratio = 0.30
-    agent_max_speed = -1
-    agent_visibility_radius = [
+    num_agents: int = 3
+    max_steps: int = 50
+    dist_to_goal_reward_ratio: float = 0.30
+    agent_max_speed: int = -1
+    agent_visibility_radius: list[float] = [
         1.5,
     ]
-    entities_initial_coord_radius = [
+    entities_initial_coord_radius: list[float] = [
         2.5,
     ]
-    entity_acceleration = 5
-    one_time_death_reward = 15
-    agent_communication_type = CommunicationType.CURRENT_ACTION
-    agent_control_noise_std = 0.2
+    entity_acceleration: int = 5
+    one_time_death_reward: int = 15
+    agent_communication_type: CommunicationType = CommunicationType.CURRENT_ACTION
+    agent_control_noise_std: float = 0.2
 
 
 class EnvConfig(NamedTuple):
-    env_cls_name = "TargetMPEEnvironment"
-    env_kwargs = EnvKwArgs()
+    env_cls_name: str = "TargetMPEEnvironment"
+    env_kwargs: EnvKwArgs = EnvKwArgs()
 
 
 class PPOConfig(NamedTuple):
@@ -52,16 +52,16 @@ class PPOConfig(NamedTuple):
         update_epochs: Number of epochs to update the policy per update. One epoch is NUM_MINIBATCHES updates.
     """
 
-    clip_eps = 0.2
-    is_clip_eps_per_env = False
-    max_grad_norm = 0.5
-    num_steps_per_update = 128
-    num_minibatches_actors = 4
-    update_epochs = 4
+    clip_eps: float = 0.2
+    is_clip_eps_per_env: bool = False
+    max_grad_norm: float = 0.5
+    num_steps_per_update: int = 128
+    num_minibatches_actors: int = 4
+    update_epochs: int = 4
 
-    gae_lambda = 0.95
-    entropy_coefficient = 0.01
-    value_coefficient = 0.5
+    gae_lambda: float = 0.95
+    entropy_coefficient: float = 0.01
+    value_coefficient: float = 0.5
 
 
 class TrainingConfig(NamedTuple):
@@ -71,39 +71,39 @@ class TrainingConfig(NamedTuple):
         gamma: discount factor.
     """
 
-    seed = 0
-    num_seeds = 2
-    lr = 2e-3
-    anneal_lr = True
-    num_envs = 4
-    gamma = 0.99
-    total_timesteps = 1e4
-    ppo_config = PPOConfig()
+    seed: int = 1
+    num_seeds: int = 2
+    lr: float = 2e-3
+    anneal_lr: bool = True
+    num_envs: int = 4
+    gamma: float = 0.99
+    total_timesteps: float = 1e4
+    ppo_config: PPOConfig = PPOConfig()
 
 
 class NetworkConfig(NamedTuple):
-    fc_dim_size = 8
-    gru_hidden_dim = 8
+    fc_dim_size: int = 8
+    gru_hidden_dim: int = 8
 
-    actor_num_hidden_linear_layer = 2
-    critic_num_hidden_linear_layer = 2
+    actor_num_hidden_linear_layer: int = 2
+    critic_num_hidden_linear_layer: int = 2
 
-    entity_type_embedding_dim = 4
+    entity_type_embedding_dim: int = 4
 
-    num_graph_attn_layers = 1
-    num_heads_per_attn_layer = 2
-    graph_attention_key_dim = 8
+    num_graph_attn_layers: int = 1
+    num_heads_per_attn_layer: int = 2
+    graph_attention_key_dim: int = 8
 
-    graph_num_linear_layer = 2
-    graph_hidden_feature_dim = 8
+    graph_num_linear_layer: int = 2
+    graph_hidden_feature_dim: int = 8
 
 
 class WandbConfig(NamedTuple):
-    entity = "josssdan"
-    project = "JaxInforMARL"
-    mode = "disabled"
-    save_model = False
-    checkpoint_model_every_update_steps = 1e2
+    entity: str = "josssdan"
+    project: str = "JaxInforMARL"
+    mode: Literal["online", "offline", "disabled"] = "disabled"
+    save_model: bool = False
+    checkpoint_model_every_update_steps: float = 1e2
 
 
 class DerivedValues(NamedTuple):

@@ -25,7 +25,6 @@ from config.config_format_conversion import config_to_dict
 from config.mappo_config import (
     MAPPOConfig as MAPPOConfig,
     CommunicationType,
-    TrainingConfig,
 )
 from envs.multiagent_env import MultiAgentEnv
 from envs.schema import MultiAgentGraph, MultiAgentObservation, PRNGKey
@@ -951,7 +950,7 @@ def main():
 
     config: MAPPOConfig = MAPPOConfig.create()
     assert (
-        TrainingConfig.num_envs > 1
+        config.training_config.num_envs > 1
     ), "Number of environments must be greater than 1 for training"
     dict_config = config_to_dict(config)
     wandb.init(

@@ -89,7 +89,7 @@ class MPEVisualizer(object):
 
         sns.despine(ax=self.ax)
 
-        ax_lim = self.config.env_config.EnvKwArgs.entities_initial_coord_radius[0] + 2
+        ax_lim = self.config.env_config.env_kwargs.entities_initial_coord_radius[0] + 2
 
         self.ax.set_xlim([-ax_lim, ax_lim])
         self.ax.set_ylim([-ax_lim, ax_lim])

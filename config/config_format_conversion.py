@@ -18,16 +18,20 @@ def config_to_dict(config):
 
 
 def dict_to_config(dictionary) -> MAPPOConfig:
-    config = MAPPOConfig()
+    config = MAPPOConfig.create()
 
-    def _dict_to_config(_dictionary):
-        nonlocal config
+    def _dict_to_config(_dictionary, config_node):
         for key, value in _dictionary.items():
             if isinstance(value, dict):
-                config = config._replace(**{key: dict_to_config(value)})
+                config_node = config_node._replace(
+                    **{key: _dict_to_config(value, getattr(config_node, key))}
+                )
             else:
-                config = config._replace(**{key: value})
+                if key == "agent_communication_type":
+                    print()
+                config_node = config_node._replace(**{key: value})
+        return config_node
 
-    _dict_to_config(dictionary)
+    config = _dict_to_config(dictionary, config)
 
     return config

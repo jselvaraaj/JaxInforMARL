@@ -95,7 +95,7 @@ def get_restored_actor(model_artifact_name, config_dict):
 
 if __name__ == "__main__":
 
-    artifact_version = "209"
+    artifact_version = "211"
 
     model_artifact_name = f"artifacts/PPO_RNN_Runner_State:v{artifact_version}"
     model_artifact_remote_name = (
