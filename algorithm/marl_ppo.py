@@ -782,7 +782,9 @@ def ppo_single_update(
             orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
             model_artifact.add_dir(checkpoint_dir)
 
-            with config_artifact.new_file("config_artifact.pkl", mode="wb") as f:
+            with config_artifact.new_file(
+                f"config_artifact_{progress}.pkl", mode="wb"
+            ) as f:
                 pickle.dump(config, f)
 
             wandb.log_artifact(model_artifact)
@@ -991,7 +993,7 @@ def main():
         orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
         model_artifact.add_dir(checkpoint_dir)
 
-        with config_artifact.new_file("config_artifact.pkl", mode="wb") as f:
+        with config_artifact.new_file("config_artifact_final.pkl", mode="wb") as f:
             pickle.dump(config, f)
 
         wandb.log_artifact(model_artifact)
