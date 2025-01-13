@@ -109,7 +109,7 @@ def get_restored_actor(model_artifact_name, config_artifact_name):
 
 if __name__ == "__main__":
 
-    wandb_run_name = "true-wildflower-95"
+    wandb_run_name = "breezy-silence-98"
     artifact_version = "1"
 
     model_artifact_name = (

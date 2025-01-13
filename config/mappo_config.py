@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import NamedTuple
 
 from beartype import beartype
-from flax import struct
 
 
 class CommunicationType(Enum):
@@ -12,8 +12,8 @@ class CommunicationType(Enum):
     CURRENT_ACTION = 3
 
 
-class EnvConfig(struct.PyTreeNode):
-    class EnvKwArgs(struct.PyTreeNode):
+class EnvConfig(NamedTuple):
+    class EnvKwArgs(NamedTuple):
         """
         Attributes:
             num_agents: Number of agents in a single environment.
@@ -25,8 +25,12 @@ class EnvConfig(struct.PyTreeNode):
         max_steps = 50
         dist_to_goal_reward_ratio = 0.30
         agent_max_speed = -1
-        agent_visibility_radius = (1.5,)
-        entities_initial_coord_radius = (2.5,)
+        agent_visibility_radius = [
+            1.5,
+        ]
+        entities_initial_coord_radius = [
+            2.5,
+        ]
         entity_acceleration = 5
         one_time_death_reward = 15
         agent_communication_type = CommunicationType.CURRENT_ACTION
@@ -36,8 +40,8 @@ class EnvConfig(struct.PyTreeNode):
     kwargs = EnvKwArgs()
 
 
-class TrainingConfig(struct.PyTreeNode):
-    class PPOConfig(struct.PyTreeNode):
+class TrainingConfig(NamedTuple):
+    class PPOConfig(NamedTuple):
         """
         Attributes:
             clip_eps: clip_param for PPO to make sure the policy being updated via SGD is close to the policy
@@ -75,7 +79,7 @@ class TrainingConfig(struct.PyTreeNode):
     ppo_config = PPOConfig()
 
 
-class NetworkConfig(struct.PyTreeNode):
+class NetworkConfig(NamedTuple):
     fc_dim_size = 8
     gru_hidden_dim = 8
 
@@ -92,7 +96,7 @@ class NetworkConfig(struct.PyTreeNode):
     graph_hidden_feature_dim = 8
 
 
-class WandbConfig(struct.PyTreeNode):
+class WandbConfig(NamedTuple):
     entity = "josssdan"
     project = "JaxInforMARL"
     mode = "disabled"
@@ -100,7 +104,7 @@ class WandbConfig(struct.PyTreeNode):
     checkpoint_model_every_update_steps = 1e2
 
 
-class DerivedValues(struct.PyTreeNode):
+class DerivedValues(NamedTuple):
     num_actors: int
     num_updates: int
     minibatch_size: int
@@ -108,12 +112,12 @@ class DerivedValues(struct.PyTreeNode):
 
 
 @beartype
-class MAPPOConfig(struct.PyTreeNode):
-    env_config: EnvConfig = struct.field()
-    training_config: TrainingConfig = struct.field()
-    network: NetworkConfig = struct.field()
-    wandb: WandbConfig = struct.field()
-    derived_values: DerivedValues = struct.field()
+class MAPPOConfig(NamedTuple):
+    env_config: EnvConfig
+    training_config: TrainingConfig
+    network: NetworkConfig
+    wandb: WandbConfig
+    derived_values: DerivedValues
 
     @classmethod
     def create(cls) -> MAPPOConfig:
@@ -155,7 +159,7 @@ class MAPPOConfig(struct.PyTreeNode):
 
 def config_to_dict(config):
     is_primitive_type = lambda obj: isinstance(
-        obj, (int, float, str, bool, type(None), CommunicationType, tuple)
+        obj, (int, float, str, bool, type(None), CommunicationType, list)
     )
     return {
         attr: (
