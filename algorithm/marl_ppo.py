@@ -3,6 +3,7 @@ Built off JaxMARL( https://github.com/FLAIROx/JaxMARL) baselines/MAPPO/mappo_rnn
 """
 
 import os
+from collections import namedtuple
 from functools import partial
 from typing import NamedTuple, cast, Any
 
@@ -196,6 +197,26 @@ def get_actor_init_input(config: MAPPOConfig, env):
     return ac_init_x, ac_init_h_state, graph_init
 
 
+def get_critic_init_input(config: MAPPOConfig, env, graph_init):
+    num_actors = config.derived_values.num_actors
+
+    cr_init_x = (
+        jnp.zeros(
+            (
+                1,
+                num_actors,
+                env.world_state_size(),
+            )
+        ),
+        graph_init,
+        jnp.zeros((1, num_actors)),
+    )
+    cr_init_h_state = ScannedRNN.initialize_carry(
+        num_actors, config.network.gru_hidden_dim
+    )
+    return cr_init_x, cr_init_h_state
+
+
 def get_init_communication_message(config: MAPPOConfig, env, ac_init_h_state):
     communication_type = config.env_config.kwargs.agent_communication_type
 
@@ -247,6 +268,7 @@ class StaticVariables(NamedTuple):
     actor_initial_hidden_State: Float[Array, "..."]
     critic_network: CriticRNN
     initial_communication_message: Float[Array, "..."]
+    store_env_state: bool
 
 
 @jaxtyped(typechecker=beartype)
@@ -302,6 +324,7 @@ def _env_step(
         ac_init_h_state,
         critic_network,
         initial_communication_message,
+        store_env_state,
     ) = env_step_static_variables
 
     num_env = config.training_config.num_envs
@@ -421,6 +444,14 @@ def _env_step(
         world_state,
         info,
     )
+    if store_env_state:
+        TransitionWithEnvState = namedtuple(
+            "TransitionWithEnvState", Transition._fields + ("env_state",)
+        )
+        transition = TransitionWithEnvState(
+            *transition,
+            env_state=log_env_state,  # type: ignore
+        )
     runner_state = EnvStepRunnerState(
         train_states,
         log_env_state,
@@ -441,7 +472,7 @@ def _update_epoch(
     update_state: UpdateEpochState,
     unused,
 ):
-    _, config, actor_network, _, critic_network, _ = update_epoch_static_variables
+    _, config, actor_network, _, critic_network, _, _ = update_epoch_static_variables
     ppo_config = config.training_config.ppo_config
 
     def _update_minibatch(train_states, batch_info):
@@ -617,6 +648,7 @@ def ppo_single_update(
         ac_init_h_state,
         critic_network,
         initial_communication_message,
+        store_env_state,
     ) = static_variables
     ppo_config = config.training_config.ppo_config
     num_env = config.training_config.num_envs
@@ -635,6 +667,7 @@ def ppo_single_update(
             ac_init_h_state,
             critic_network,
             initial_communication_message,
+            store_env_state,
         ),
     )
     runner_state, traj_batch = jax.lax.scan(
@@ -808,21 +841,7 @@ def make_train(config: MAPPOConfig):
         actor_network_params = actor_network.init(
             _rng_actor, ac_init_h_state, ac_init_x
         )
-
-        cr_init_x = (
-            jnp.zeros(
-                (
-                    1,
-                    num_actors,
-                    env.world_state_size(),
-                )
-            ),
-            graph_init,
-            jnp.zeros((1, num_actors)),
-        )
-        cr_init_h_state = ScannedRNN.initialize_carry(
-            num_actors, config.network.gru_hidden_dim
-        )
+        cr_init_x, cr_init_h_state = get_critic_init_input(config, env, graph_init)
         critic_network_params = critic_network.init(
             _rng_critic, cr_init_h_state, cr_init_x
         )
@@ -903,6 +922,7 @@ def make_train(config: MAPPOConfig):
             ac_init_h_state,
             critic_network,
             initial_communication_message_env_input,
+            False,
         )
         ppo_single_update_with_static_args = partial(
             ppo_single_update, update_step_static_args

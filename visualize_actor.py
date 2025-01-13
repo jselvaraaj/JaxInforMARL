@@ -1,42 +1,53 @@
 import os
 from functools import partial
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import optax
 import orbax
+import wandb
+from flax.training.train_state import TrainState
 
 from algorithm.marl_ppo import (
     make_env_from_config,
-    batchify_graph,
     get_actor_init_input,
     get_init_communication_message,
+    _env_step,
+    StaticVariables,
+    get_critic_init_input,
+    ActorAndCriticTrainStates,
+    ActorAndCriticHiddenStates,
+    EnvStepRunnerState,
 )
-from config.mappo_config import MAPPOConfig, CommunicationType
+from config.mappo_config import MAPPOConfig
 from envs.mpe_visualizer import MPEVisualizer
-from model.actor_critic_rnn import GraphAttentionActorRNN
+from model.actor_critic_rnn import GraphAttentionActorRNN, CriticRNN
 
 
 def get_restored_actor(artifact_name):
     config: MAPPOConfig = MAPPOConfig.create()
-    assert (
-        config.TrainingConfig.num_envs == 1
-    ), "Number of environments must be equal 1 for Visualizing in the config"
     env = make_env_from_config(config)
     rng = jax.random.PRNGKey(config.training_config.seed)
 
-    rng, _rng_actor = jax.random.split(rng, 2)
+    rng, _rng_actor, _rng_critic = jax.random.split(rng, 3)
 
     num_actions = env.action_space_for_agent(env.agent_labels[0]).n
 
     actor_network = GraphAttentionActorRNN(num_actions, config=config)
+    critic_network = CriticRNN(config=config)
 
     ac_init_x, ac_init_h_state, graph_init = get_actor_init_input(config, env)
 
-    _, initial_communication_message_env_input = get_init_communication_message(
-        config, env, ac_init_h_state
+    initial_communication_message, initial_communication_message_env_input = (
+        get_init_communication_message(config, env, ac_init_h_state)
     )
 
     actor_network_params = actor_network.init(_rng_actor, ac_init_h_state, ac_init_x)
+
+    cr_init_x, cr_init_h_state = get_critic_init_input(config, env, graph_init)
+
+    critic_network_params = critic_network.init(_rng_critic, cr_init_h_state, cr_init_x)
 
     running_script_path = os.path.abspath(".")
     checkpoint_dir = os.path.join(running_script_path, artifact_name)
@@ -71,97 +82,117 @@ def get_restored_actor(artifact_name):
         config,
         actor_network,
         restored_actor_params,
+        critic_network,
+        critic_network_params,
         ac_init_h_state,
+        cr_init_h_state,
         env,
         initial_communication_message_env_input,
+        initial_communication_message,
         rng,
     )
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v189"
+
+    artifact_version = "201"
+    artifact_name = f"artifacts/PPO_RNN_Runner_State:v{artifact_version}"
+    if not Path(artifact_name).is_dir():
+        artifact_remote_name = (
+            f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"
+        )
+
+        api = wandb.Api()
+        artifact = api.artifact(artifact_remote_name, type="model")
+        artifact_dir = artifact.download()
+
     (
         config,
-        actor,
-        restored_params,
-        actor_init_hidden_state,
+        actor_network,
+        actor_restored_params,
+        critic_network,
+        critic_network_params,
+        ac_init_h_state,
+        cr_init_h_state,
         env,
         initial_communication_message_env_input,
-        rng,
+        initial_communication_message,
+        key,
     ) = get_restored_actor(artifact_name)
-    env = env._env._env
 
     max_steps = config.env_config.kwargs.max_steps
-    key = rng
+    num_env = config.training_config.num_envs
+
     key, key_r = jax.random.split(key, 2)
 
-    if initial_communication_message_env_input.size > 0:
-        initial_communication_message_env_input = (
-            initial_communication_message_env_input[0]
-        )
-    obs, graph, state = env.reset(key_r, initial_communication_message_env_input)
+    env_key = jax.random.split(key_r, num_env)
 
-    hidden_state = actor_init_hidden_state
+    obs_v, graph_v, env_state = jax.vmap(
+        env.reset,
+        in_axes=(
+            0,
+            0 if initial_communication_message_env_input.size != 0 else None,
+        ),
+    )(env_key, initial_communication_message_env_input)
 
-    def env_step(key, env, runner_state, unused):
+    key, _rng = jax.random.split(key, 2)
 
-        state, obs, graph, hidden_state, last_communication_message = runner_state
+    max_grad_norm = config.training_config.ppo_config.max_grad_norm
+    lr = config.training_config.lr
 
-        communication_type = config.env_config.kwargs.agent_communication_type
-
-        key, key_env, key_actor = jax.random.split(key, 3)
-
-        obs = jnp.stack(list(obs.values()))[None]
-        dones = state.dones[None, ...]
-
-        graph = jax.tree.map(lambda x: x[None, ...], graph)
-        graph = batchify_graph(graph, env.agent_labels_to_index)
-        graph = jax.tree.map(lambda x: x[None, ...], graph)
-
-        x = (obs, graph, dones)
-        hidden_state, pi = actor.apply(restored_params, hidden_state, x)
-
-        action_by_index = pi.sample(seed=key_actor).squeeze()
-
-        if communication_type == CommunicationType.CURRENT_ACTION:
-            last_communication_message = action_by_index[..., None]
-
-        state = state.replace(agent_communication_message=last_communication_message)
-
-        action = {
-            agent_label: action_by_index[env.agent_labels_to_index[agent_label]]
-            for agent_label in env.agent_labels
-        }
-
-        obs, graph, state, _, _, _ = env.step(
-            key_env, state, action, last_communication_message
-        )
-
-        if communication_type == CommunicationType.HIDDEN_STATE:
-            last_communication_message = hidden_state
-        elif (
-            communication_type == CommunicationType.PAST_ACTION
-            or communication_type == CommunicationType.CURRENT_ACTION
-        ):
-            last_communication_message = action_by_index.squeeze()[..., None]
-
-        runner_state = (state, obs, graph, hidden_state, last_communication_message)
-
-        return runner_state, state
-
-    env_step = partial(env_step, key, env)
-
-    runner_state = (
-        state,
-        obs,
-        graph,
-        hidden_state,
-        initial_communication_message_env_input,
+    actor_tx = optax.chain(
+        optax.clip_by_global_norm(max_grad_norm),
+        optax.adam(lr, eps=1e-5),
     )
-    with jax.disable_jit(False):
-        runner_state, state_seq = jax.lax.scan(env_step, runner_state, None, max_steps)
+    critic_tx = optax.chain(
+        optax.clip_by_global_norm(max_grad_norm),
+        optax.adam(lr, eps=1e-5),
+    )
 
-    with jax.disable_jit(False):
-        viz = MPEVisualizer(env, state_seq, config)
+    actor_train_state = TrainState.create(
+        apply_fn=actor_network.apply,
+        params=actor_restored_params,
+        tx=actor_tx,
+    )
+    critic_train_state = TrainState.create(
+        apply_fn=critic_network.apply,
+        params=critic_network_params,
+        tx=critic_tx,
+    )
 
-        viz.animate(view=True)
+    actor_critic_train_states = ActorAndCriticTrainStates(
+        actor_train_state, critic_train_state
+    )
+    actor_critic_hidden_state = ActorAndCriticHiddenStates(
+        ac_init_h_state, cr_init_h_state
+    )
+    env_step_runner_state = EnvStepRunnerState(
+        actor_critic_train_states,
+        env_state,
+        obs_v,
+        graph_v,
+        jnp.zeros(config.derived_values.num_actors, dtype=bool),
+        actor_critic_hidden_state,
+        initial_communication_message,
+        _rng,
+    )
+
+    store_env_state = True
+    _env_step_with_static_args = partial(
+        _env_step,
+        StaticVariables(
+            env,
+            config,
+            actor_network,
+            ac_init_h_state,
+            critic_network,
+            initial_communication_message_env_input,
+            store_env_state,
+        ),
+    )
+    runner_state, traj_batch = jax.lax.scan(
+        _env_step_with_static_args, env_step_runner_state, None, max_steps
+    )
+    viz = MPEVisualizer(env._env._env, traj_batch.env_state.env_state, config)
+
+    viz.animate(view=True)

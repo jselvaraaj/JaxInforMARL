@@ -17,9 +17,8 @@
 3. `config/mappo_config.py`. This is the one and only file for changing config values to run experiments.
    Used python classes instead of yaml file to get auto complete and type checking and easier refactor when accessing
    and changing the structure of config.
-4. `download_artifacts.py` for downloading trained actor weights from wandb.
-5. `visualize_actor.py` for visualizing the trained actor in a local environment.
-6. `model/actor_critic_rnn.py` has all the flax linen networks used in the PPO.
+4. `visualize_actor.py` for visualizing the trained actor in a local environment.
+5. `model/actor_critic_rnn.py` has all the flax linen networks used in the PPO.
 
 <h2 name="train_test_flow" id="train_test_flow">Typical train and test flow</h2>
 

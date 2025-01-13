@@ -23,12 +23,12 @@ class MAPPOConfig(struct.PyTreeNode):
                 agent_max_speed: Negative value means no maximum speed.
             """
 
-            num_agents = 6
+            num_agents = 8
             max_steps = 50
             dist_to_goal_reward_ratio = 0.30
             agent_max_speed = -1
             agent_visibility_radius = (1.5,)
-            entities_initial_coord_radius = (3,)
+            entities_initial_coord_radius = (2.5,)
             entity_acceleration = 5
             one_time_death_reward = 15
             agent_communication_type = CommunicationType.CURRENT_ACTION
@@ -70,7 +70,7 @@ class MAPPOConfig(struct.PyTreeNode):
         num_seeds = 2
         lr = 2e-3
         anneal_lr = True
-        num_envs = 1
+        num_envs = 4
         gamma = 0.99
         total_timesteps = 1e4
         ppo_config = PPOConfig()
@@ -84,7 +84,7 @@ class MAPPOConfig(struct.PyTreeNode):
 
         entity_type_embedding_dim = 4
 
-        num_graph_attn_layers = 1
+        num_graph_attn_layers = 3
         num_heads_per_attn_layer = 4
         graph_attention_key_dim = 8
 
@@ -135,9 +135,6 @@ class MAPPOConfig(struct.PyTreeNode):
         assert (
             _derived_values.num_updates > 0
         ), "Number of updates per environment must be greater than 0."
-        # assert (
-        #     batch_size % _derived_values.minibatch_size == 0
-        # ), f"Minibatch size {_derived_values.minibatch_size} must divide batch size {batch_size}."
 
         return cls(derived_values=_derived_values)
 
