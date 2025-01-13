@@ -28,8 +28,11 @@ def dict_to_config(dictionary) -> MAPPOConfig:
                 )
             else:
                 if key == "agent_communication_type":
-                    print()
-                config_node = config_node._replace(**{key: value})
+                    config_node = config_node._replace(
+                        **{key: getattr(CommunicationType, value)}
+                    )
+                else:
+                    config_node = config_node._replace(**{key: value})
         return config_node
 
     config = _dict_to_config(dictionary, config)
