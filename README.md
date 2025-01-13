@@ -26,8 +26,7 @@
     - Remember to set up the config in `WandbConfig` in `config/mappo_config.py` and change mode `online` to get wandb
       logging.
     - The artifacts are saved under the name "PPO_RNN_Runner_State"
-2. Find the latest artifact name in wandb and download the artifact in local machine with `download_artifacts.py`
-3. Visualize the actor with `visualize_actor.py` after changing the `artifact_name` variable in the block.
+2. Visualize the actor with `visualize_actor.py` after changing the `artifact_version` variable in the block.
    `if __name__ == "__main__"`
 
 # Note
@@ -35,9 +34,9 @@
 It is recommended to first install either `requirements_jax_cpu.txt` or `requirements_jax_cuda.txt` before
 `requirements.txt` since the packages in `requirements` will install a jax version for you.
 
-<h2 name="citation" id="citation">Citing JaxInfoMARL</h2>
+<h2 name="citation" id="citation">Citing JaxInforMARL</h2>
 
-If you use JaxInfoMARL in your work, please cite as follows:
+If you use JaxInforMARL in your work, please cite as follows:
 
 ```
 @software{JaxInforMARL,
