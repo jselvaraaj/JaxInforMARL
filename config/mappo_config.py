@@ -21,7 +21,7 @@ class EnvConfig(struct.PyTreeNode):
             agent_max_speed: Negative value means no maximum speed.
         """
 
-        num_agents = 8
+        num_agents = 3
         max_steps = 50
         dist_to_goal_reward_ratio = 0.30
         agent_max_speed = -1
@@ -51,7 +51,7 @@ class TrainingConfig(struct.PyTreeNode):
         clip_eps = 0.2
         is_clip_eps_per_env = False
         max_grad_norm = 0.5
-        num_steps_per_update = 256
+        num_steps_per_update = 128
         num_minibatches_actors = 4
         update_epochs = 4
 
@@ -76,20 +76,20 @@ class TrainingConfig(struct.PyTreeNode):
 
 
 class NetworkConfig(struct.PyTreeNode):
-    fc_dim_size = 64
-    gru_hidden_dim = 64
+    fc_dim_size = 8
+    gru_hidden_dim = 8
 
-    actor_num_hidden_linear_layer = 4
-    critic_num_hidden_linear_layer = 4
+    actor_num_hidden_linear_layer = 2
+    critic_num_hidden_linear_layer = 2
 
     entity_type_embedding_dim = 4
 
-    num_graph_attn_layers = 3
-    num_heads_per_attn_layer = 4
+    num_graph_attn_layers = 1
+    num_heads_per_attn_layer = 2
     graph_attention_key_dim = 8
 
-    graph_num_linear_layer = 4
-    graph_hidden_feature_dim = 32
+    graph_num_linear_layer = 2
+    graph_hidden_feature_dim = 8
 
 
 class WandbConfig(struct.PyTreeNode):
@@ -109,39 +109,48 @@ class DerivedValues(struct.PyTreeNode):
 
 @beartype
 class MAPPOConfig(struct.PyTreeNode):
-    env_config = EnvConfig()
-    training_config = TrainingConfig()
-    network = NetworkConfig()
-    wandb = WandbConfig()
+    env_config: EnvConfig = struct.field()
+    training_config: TrainingConfig = struct.field()
+    network: NetworkConfig = struct.field()
+    wandb: WandbConfig = struct.field()
     derived_values: DerivedValues = struct.field()
 
     @classmethod
     def create(cls) -> MAPPOConfig:
-        env_config = cls.env_config
-        train_config = cls.training_config
-        num_actors = env_config.kwargs.num_agents * train_config.num_envs
-        batch_size = num_actors * train_config.ppo_config.num_steps_per_update
+        env_config = EnvConfig()
+        training_config = TrainingConfig()
+        network = NetworkConfig()
+        wandb = WandbConfig()
+
+        num_actors = env_config.kwargs.num_agents * training_config.num_envs
+        batch_size = num_actors * training_config.ppo_config.num_steps_per_update
         _derived_values = DerivedValues(
             num_actors=num_actors,
             num_updates=int(
-                train_config.total_timesteps
-                // train_config.num_envs
-                // train_config.ppo_config.num_steps_per_update
+                training_config.total_timesteps
+                // training_config.num_envs
+                // training_config.ppo_config.num_steps_per_update
             ),
             minibatch_size=(
-                batch_size // train_config.ppo_config.num_minibatches_actors
+                batch_size // training_config.ppo_config.num_minibatches_actors
             ),
             scaled_clip_eps=(
-                train_config.ppo_config.clip_eps / env_config.kwargs.num_agents
-                if train_config.ppo_config.is_clip_eps_per_env
-                else train_config.ppo_config.clip_eps
+                training_config.ppo_config.clip_eps / env_config.kwargs.num_agents
+                if training_config.ppo_config.is_clip_eps_per_env
+                else training_config.ppo_config.clip_eps
             ),
         )
         assert (
             _derived_values.num_updates > 0
         ), "Number of updates per environment must be greater than 0."
 
-        return cls(derived_values=_derived_values)
+        return cls(
+            env_config=env_config,
+            training_config=training_config,
+            network=network,
+            wandb=wandb,
+            derived_values=_derived_values,
+        )
 
 
 def config_to_dict(config):
