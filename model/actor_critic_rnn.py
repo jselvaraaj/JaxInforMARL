@@ -48,7 +48,7 @@ class ActorRNN(nn.Module):
     def __call__(self, hidden, x):
         obs, dones = x
         embedding = nn.Dense(
-            self.config.network.fc_dim_size,
+            self.config.network_config.fc_dim_size,
             kernel_init=orthogonal(jnp.sqrt(2)),
             bias_init=constant(0.0),
         )(obs)
@@ -60,16 +60,16 @@ class ActorRNN(nn.Module):
         rnn_in = (embedding, dones)
         hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        for _ in range(self.config.network.actor_num_hidden_linear_layer - 1):
+        for _ in range(self.config.network_config.actor_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
-                self.config.network.gru_hidden_dim,
+                self.config.network_config.gru_hidden_dim,
                 kernel_init=orthogonal(2),
                 bias_init=constant(0.0),
             )(embedding)
             embedding = nn.relu(embedding)
 
         embedding = nn.Dense(
-            self.config.network.gru_hidden_dim,
+            self.config.network_config.gru_hidden_dim,
             kernel_init=orthogonal(2),
             bias_init=constant(0.0),
         )(embedding)
@@ -103,15 +103,15 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         sum_n_node = nodes.shape[0]
 
         def linear_layer(x):
-            for _ in range(self.config.network.graph_num_linear_layer - 1):
+            for _ in range(self.config.network_config.graph_num_linear_layer - 1):
                 x = nn.Dense(
-                    self.config.network.graph_hidden_feature_dim,
+                    self.config.network_config.graph_hidden_feature_dim,
                     kernel_init=orthogonal(jnp.sqrt(2)),
                     bias_init=constant(0.0),
                 )(x)
                 x = nn.relu(x)
             x = nn.Dense(
-                self.config.network.graph_hidden_feature_dim,
+                self.config.network_config.graph_hidden_feature_dim,
                 kernel_init=orthogonal(jnp.sqrt(2)),
                 bias_init=constant(0.0),
             )(x)
@@ -123,7 +123,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
         def key_projection(x):
             return nn.Dense(
-                self.config.network.graph_attention_key_dim,
+                self.config.network_config.graph_attention_key_dim,
                 kernel_init=orthogonal(jnp.sqrt(2)),
                 bias_init=constant(0.0),
             )(x)
@@ -138,7 +138,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
         nodes_seg_sum_from_each_attn_head = []
 
-        for _ in range(self.config.network.num_heads_per_attn_layer):
+        for _ in range(self.config.network_config.num_heads_per_attn_layer):
             # extract key for node feature to be used in attention
             key_sent_attributes = key_projection(sent_attributes)
             key_received_attributes = key_projection(received_attributes)
@@ -149,7 +149,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             softmax_logits: Float[Array, "edge_id, edge_id"] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=1
-            ) / jnp.sqrt(self.config.network.graph_attention_key_dim)
+            ) / jnp.sqrt(self.config.network_config.graph_attention_key_dim)
 
             # Compute the softmax weights on the entire tree.
             weights = utils.segment_softmax(
@@ -202,7 +202,7 @@ class GraphStackedMultiHeadAttention(nn.Module):
 
         # Embed entity and compute node features.
         entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(2, self.config.network.entity_type_embedding_dim)(
+        entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
             entity_type
         )
         nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
@@ -217,7 +217,7 @@ class GraphStackedMultiHeadAttention(nn.Module):
             globals=None,
         )
 
-        for _ in range(self.config.network.num_graph_attn_layers - 1):
+        for _ in range(self.config.network_config.num_graph_attn_layers - 1):
             graph = GraphMultiHeadAttentionLayer(self.config)(
                 graph, avg_multi_head=False
             )
@@ -270,7 +270,7 @@ class CriticRNN(nn.Module):
 
         # Embed entity_type.
         entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(2, self.config.network.entity_type_embedding_dim)(
+        entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
             entity_type
         )
         nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
@@ -280,7 +280,7 @@ class CriticRNN(nn.Module):
         )  # Aggregate all node features for a given actor and time step
 
         embedding = nn.Dense(
-            self.config.network.fc_dim_size,
+            self.config.network_config.fc_dim_size,
             kernel_init=orthogonal(jnp.sqrt(2)),
             bias_init=constant(0.0),
         )(world_state)
@@ -292,16 +292,16 @@ class CriticRNN(nn.Module):
         rnn_in = (embedding, dones)
         hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        for _ in range(self.config.network.critic_num_hidden_linear_layer - 1):
+        for _ in range(self.config.network_config.critic_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
-                self.config.network.gru_hidden_dim,
+                self.config.network_config.gru_hidden_dim,
                 kernel_init=orthogonal(2),
                 bias_init=constant(0.0),
             )(embedding)
             embedding = nn.relu(embedding)
 
         embedding = nn.Dense(
-            self.config.network.gru_hidden_dim,
+            self.config.network_config.gru_hidden_dim,
             kernel_init=orthogonal(2),
             bias_init=constant(0.0),
         )(embedding)

@@ -1,4 +1,3 @@
-import config.mappo_config as mappo_config_module
 from config.mappo_config import MAPPOConfig, CommunicationType
 
 
@@ -18,8 +17,17 @@ def config_to_dict(config):
     }
 
 
-def dict_to_config(dictionary, name="MAPPOConfig") -> MAPPOConfig:
-    for key, value in dictionary.items():
-        if isinstance(value, dict):
-            dictionary[key] = dict_to_config(value, key)
-    return getattr(mappo_config_module, name)(**dictionary)
+def dict_to_config(dictionary) -> MAPPOConfig:
+    config = MAPPOConfig()
+
+    def _dict_to_config(_dictionary):
+        nonlocal config
+        for key, value in _dictionary.items():
+            if isinstance(value, dict):
+                config = config._replace(**{key: dict_to_config(value)})
+            else:
+                config = config._replace(**{key: value})
+
+    _dict_to_config(dictionary)
+
+    return config

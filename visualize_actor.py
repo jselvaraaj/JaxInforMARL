@@ -1,5 +1,4 @@
 import os
-import shutil
 from functools import partial
 from pathlib import Path
 
@@ -96,13 +95,12 @@ def get_restored_actor(model_artifact_name, config_dict):
 
 if __name__ == "__main__":
 
-    wandb_run_name = "vocal-glade-99"
-    artifact_version = "1"
+    artifact_version = "209"
 
-    model_artifact_name = (
-        f"artifacts/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
+    model_artifact_name = f"artifacts/PPO_RNN_Runner_State:v{artifact_version}"
+    model_artifact_remote_name = (
+        f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"
     )
-    model_artifact_remote_name = f"josssdan/JaxInforMARL/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
 
     api = wandb.Api()
     model_artifact = api.artifact(model_artifact_remote_name, type="model")
@@ -126,7 +124,7 @@ if __name__ == "__main__":
         key,
     ) = get_restored_actor(model_artifact_name, config_dict)
 
-    max_steps = config.env_config.kwargs.max_steps
+    max_steps = config.env_config.env_kwargs.max_steps
     num_env = config.training_config.num_envs
 
     key, key_r = jax.random.split(key, 2)
@@ -203,4 +201,4 @@ if __name__ == "__main__":
 
     viz.animate(view=True)
 
-    shutil.rmtree(model_artifact_name)
+    # shutil.rmtree(model_artifact_name)

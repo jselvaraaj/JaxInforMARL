@@ -106,7 +106,7 @@ def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
 def make_env_from_config(config: MAPPOConfig):
     env_class_name = config.env_config.env_cls_name
     env_class = getattr(envs, env_class_name)
-    env_kwargs = config_to_dict(config.env_config.kwargs)
+    env_kwargs = config_to_dict(config.env_config.env_kwargs)
     env = MPEWorldStateWrapper(env_class(**env_kwargs))
     env = MPELogWrapper(env)
     return env
@@ -115,9 +115,9 @@ def make_env_from_config(config: MAPPOConfig):
 def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
     node_feature_dim = 7
-    communication_type = config.env_config.kwargs.agent_communication_type
+    communication_type = config.env_config.env_kwargs.agent_communication_type
     if communication_type == CommunicationType.HIDDEN_STATE:
-        node_feature_dim += config.network.gru_hidden_dim
+        node_feature_dim += config.network_config.gru_hidden_dim
     elif (
         communication_type == CommunicationType.PAST_ACTION
         or communication_type == CommunicationType.CURRENT_ACTION
@@ -192,7 +192,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
         jnp.zeros((1, num_actors)),
     )
     ac_init_h_state = ScannedRNN.initialize_carry(
-        num_actors, config.network.gru_hidden_dim
+        num_actors, config.network_config.gru_hidden_dim
     )
 
     return ac_init_x, ac_init_h_state, graph_init
@@ -213,13 +213,13 @@ def get_critic_init_input(config: MAPPOConfig, env, graph_init):
         jnp.zeros((1, num_actors)),
     )
     cr_init_h_state = ScannedRNN.initialize_carry(
-        num_actors, config.network.gru_hidden_dim
+        num_actors, config.network_config.gru_hidden_dim
     )
     return cr_init_x, cr_init_h_state
 
 
 def get_init_communication_message(config: MAPPOConfig, env, ac_init_h_state):
-    communication_type = config.env_config.kwargs.agent_communication_type
+    communication_type = config.env_config.env_kwargs.agent_communication_type
 
     num_env = config.training_config.num_envs
 
@@ -346,7 +346,7 @@ def _env_step(
     )
     h_states = h_states._replace(actor_hidden_state=ac_h_state)
 
-    communication_type = config.env_config.kwargs.agent_communication_type
+    communication_type = config.env_config.env_kwargs.agent_communication_type
 
     initial_agent_communication_message = initial_communication_message
     agent_communication_message = initial_agent_communication_message
@@ -763,13 +763,14 @@ def ppo_single_update(
         )
         update_steps = metric["update_steps"]
         if (
-            config.wandb.save_model
-            and update_steps % config.wandb.checkpoint_model_every_update_steps == 0
+            config.wandb_config.save_model
+            and update_steps % config.wandb_config.checkpoint_model_every_update_steps
+            == 0
         ):
             dict_config = config_to_dict(config)
 
             model_artifact = wandb.Artifact(
-                f"PPO_RNN_Runner_State_{wandb.run.name}",
+                f"PPO_RNN_Runner_State",
                 type="model",
                 metadata=dict_config,
             )
@@ -889,10 +890,10 @@ def make_train(config: MAPPOConfig):
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, num_env)
         ac_init_h_state = ScannedRNN.initialize_carry(
-            config.derived_values.num_actors, config.network.gru_hidden_dim
+            config.derived_values.num_actors, config.network_config.gru_hidden_dim
         )
         cr_init_h_state = ScannedRNN.initialize_carry(
-            config.derived_values.num_actors, config.network.gru_hidden_dim
+            config.derived_values.num_actors, config.network_config.gru_hidden_dim
         )
 
         initial_communication_message, initial_communication_message_env_input = (
@@ -954,9 +955,9 @@ def main():
     ), "Number of environments must be greater than 1 for training"
     dict_config = config_to_dict(config)
     wandb.init(
-        entity=config.wandb.entity,
-        project=config.wandb.project,
-        mode=config.wandb.mode,
+        entity=config.wandb_config.entity,
+        project=config.wandb_config.project,
+        mode=config.wandb_config.mode,
         config=dict_config,
     )
     rng = jax.random.PRNGKey(config.training_config.seed)
@@ -971,9 +972,9 @@ def main():
         # "critic_train_state": out["runner_state"][0][0][1].params,
     }
 
-    if config.wandb.save_model:
+    if config.wandb_config.save_model:
         model_artifact = wandb.Artifact(
-            f"PPO_RNN_Runner_State_{wandb.run.name}", type="model", metadata=dict_config
+            f"PPO_RNN_Runner_State", type="model", metadata=dict_config
         )
         running_script_path = os.path.abspath(".")
         checkpoint_dir = os.path.join(
