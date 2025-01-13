@@ -3,6 +3,7 @@ Built off JaxMARL( https://github.com/FLAIROx/JaxMARL) baselines/MAPPO/mappo_rnn
 """
 
 import os
+import pickle
 from collections import namedtuple
 from functools import partial
 from typing import NamedTuple, cast, Any
@@ -765,7 +766,12 @@ def ppo_single_update(
             config.wandb.save_model
             and update_steps % config.wandb.checkpoint_model_every_update_steps == 0
         ):
-            model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
+            model_artifact = wandb.Artifact(
+                f"PPO_RNN_Runner_State_{wandb.run.name}", type="model"
+            )
+            config_artifact = wandb.Artifact(
+                f"PPO_RNN_Runner_State_Config_{wandb.run.name}", type="config"
+            )
             running_script_path = os.path.abspath(".")
             checkpoint_dir = os.path.join(
                 running_script_path,
@@ -775,7 +781,12 @@ def ppo_single_update(
             save_args = orbax_utils.save_args_from_target(out)
             orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
             model_artifact.add_dir(checkpoint_dir)
+
+            with config_artifact.new_file("config_artifact.pkl", mode="wb") as f:
+                pickle.dump(config, f)
+
             wandb.log_artifact(model_artifact)
+            wandb.log_artifact(config_artifact)
         print(
             f"progress: {progress:.4f}% ; update step: {update_steps}/{config.derived_values.num_updates}"
         )
@@ -964,7 +975,12 @@ def main():
     }
 
     if config.wandb.save_model:
-        model_artifact = wandb.Artifact("PPO_RNN_Runner_State", type="model")
+        model_artifact = wandb.Artifact(
+            f"PPO_RNN_Runner_State_{wandb.run.name}", type="model"
+        )
+        config_artifact = wandb.Artifact(
+            f"PPO_RNN_Runner_State_Config_{wandb.run.name}", type="config"
+        )
         running_script_path = os.path.abspath(".")
         checkpoint_dir = os.path.join(
             running_script_path,
@@ -974,7 +990,12 @@ def main():
         save_args = orbax_utils.save_args_from_target(out)
         orbax_checkpointer.save(checkpoint_dir, out, save_args=save_args)
         model_artifact.add_dir(checkpoint_dir)
+
+        with config_artifact.new_file("config_artifact.pkl", mode="wb") as f:
+            pickle.dump(config, f)
+
         wandb.log_artifact(model_artifact)
+        wandb.log_artifact(config_artifact)
 
     wandb.finish()
 
