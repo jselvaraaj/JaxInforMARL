@@ -79,7 +79,7 @@ def get_restored_actor(artifact_name):
 
 
 if __name__ == "__main__":
-    artifact_name = "artifacts/PPO_RNN_Runner_State:v174"
+    artifact_name = "artifacts/PPO_RNN_Runner_State:v189"
     (
         config,
         actor,
@@ -95,7 +95,11 @@ if __name__ == "__main__":
     key = rng
     key, key_r = jax.random.split(key, 2)
 
-    obs, graph, state = env.reset(key_r, initial_communication_message_env_input[0])
+    if initial_communication_message_env_input.size > 0:
+        initial_communication_message_env_input = (
+            initial_communication_message_env_input[0]
+        )
+    obs, graph, state = env.reset(key_r, initial_communication_message_env_input)
 
     hidden_state = actor_init_hidden_state
 
@@ -104,8 +108,6 @@ if __name__ == "__main__":
         state, obs, graph, hidden_state, last_communication_message = runner_state
 
         communication_type = config.env_config.kwargs.agent_communication_type
-
-        state = state.replace(agent_communication_message=last_communication_message)
 
         key, key_env, key_actor = jax.random.split(key, 3)
 
@@ -121,6 +123,11 @@ if __name__ == "__main__":
 
         action_by_index = pi.sample(seed=key_actor).squeeze()
 
+        if communication_type == CommunicationType.CURRENT_ACTION:
+            last_communication_message = action_by_index[..., None]
+
+        state = state.replace(agent_communication_message=last_communication_message)
+
         action = {
             agent_label: action_by_index[env.agent_labels_to_index[agent_label]]
             for agent_label in env.agent_labels
@@ -132,7 +139,10 @@ if __name__ == "__main__":
 
         if communication_type == CommunicationType.HIDDEN_STATE:
             last_communication_message = hidden_state
-        elif communication_type == CommunicationType.PAST_ACTION:
+        elif (
+            communication_type == CommunicationType.PAST_ACTION
+            or communication_type == CommunicationType.CURRENT_ACTION
+        ):
             last_communication_message = action_by_index.squeeze()[..., None]
 
         runner_state = (state, obs, graph, hidden_state, last_communication_message)
@@ -146,7 +156,7 @@ if __name__ == "__main__":
         obs,
         graph,
         hidden_state,
-        initial_communication_message_env_input[0],
+        initial_communication_message_env_input,
     )
     with jax.disable_jit(False):
         runner_state, state_seq = jax.lax.scan(env_step, runner_state, None, max_steps)

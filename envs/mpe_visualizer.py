@@ -76,6 +76,7 @@ class MPEVisualizer(object):
         state = self.state_seq.replace(
             entity_positions=self.state_seq.entity_positions[0],
             step=self.state_seq.step[0],
+            agent_visibility_radius=self.state_seq.agent_visibility_radius[0],
         )
         self.collision_counter = 0
 
@@ -85,7 +86,7 @@ class MPEVisualizer(object):
 
         sns.despine(ax=self.ax)
 
-        ax_lim = self.config.env_config.EnvKwArgs.entities_initial_coord_radius + 2
+        ax_lim = self.config.env_config.EnvKwArgs.entities_initial_coord_radius[0] + 2
 
         self.ax.set_xlim([-ax_lim, ax_lim])
         self.ax.set_ylim([-ax_lim, ax_lim])
@@ -113,7 +114,7 @@ class MPEVisualizer(object):
 
             visibility_circle = Circle(
                 state.entity_positions[i],  # type: ignore
-                self.env.agent_visibility_radius[i],
+                state.agent_visibility_radius[i],  # type: ignore
                 color=color,
                 ec="lightgray",
                 alpha=0.05,
