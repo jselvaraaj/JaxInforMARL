@@ -1,4 +1,5 @@
 import os
+import pickle
 from functools import partial
 from pathlib import Path
 
@@ -20,13 +21,26 @@ from algorithm.marl_ppo import (
     ActorAndCriticHiddenStates,
     EnvStepRunnerState,
 )
-from config.mappo_config import MAPPOConfig
 from envs.mpe_visualizer import MPEVisualizer
 from model.actor_critic_rnn import GraphAttentionActorRNN, CriticRNN
 
 
-def get_restored_actor(artifact_name):
-    config: MAPPOConfig = MAPPOConfig.create()
+def get_config_from_artifact(config_artifact_name):
+    directory = config_artifact_name
+    files = os.listdir(directory)
+
+    assert len(files) == 1, f"More than one file in {config_artifact_name}"
+    file_name = files[0]
+    full_path = os.path.join(directory, file_name)
+
+    with open(full_path, "rb") as f:
+        config = pickle.load(f)
+
+    return config
+
+
+def get_restored_actor(model_artifact_name, config_artifact_name):
+    config = get_config_from_artifact(config_artifact_name)
     env = make_env_from_config(config)
     rng = jax.random.PRNGKey(config.training_config.seed)
 
@@ -50,7 +64,7 @@ def get_restored_actor(artifact_name):
     critic_network_params = critic_network.init(_rng_critic, cr_init_h_state, cr_init_x)
 
     running_script_path = os.path.abspath(".")
-    checkpoint_dir = os.path.join(running_script_path, artifact_name)
+    checkpoint_dir = os.path.join(running_script_path, model_artifact_name)
 
     sharding = jax.sharding.NamedSharding(
         jax.sharding.Mesh(jax.devices(), ("model",)),
@@ -95,16 +109,25 @@ def get_restored_actor(artifact_name):
 
 if __name__ == "__main__":
 
-    artifact_version = "201"
-    artifact_name = f"artifacts/PPO_RNN_Runner_State:v{artifact_version}"
-    if not Path(artifact_name).is_dir():
-        artifact_remote_name = (
-            f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"
-        )
+    wandb_run_name = "true-wildflower-95"
+    artifact_version = "1"
+
+    model_artifact_name = (
+        f"artifacts/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
+    )
+    config_artifact_name = (
+        f"artifacts/PPO_RNN_Runner_State_Config_{wandb_run_name}:v{artifact_version}"
+    )
+    if not Path(model_artifact_name).is_dir():
+        model_artifact_remote_name = f"josssdan/JaxInforMARL/PPO_RNN_Runner_State_{wandb_run_name}:v{artifact_version}"
+        config_artifact_remote_name = f"josssdan/JaxInforMARL/PPO_RNN_Runner_State_Config_{wandb_run_name}:v{artifact_version}"
 
         api = wandb.Api()
-        artifact = api.artifact(artifact_remote_name, type="model")
-        artifact_dir = artifact.download()
+        model_artifact = api.artifact(model_artifact_remote_name, type="model")
+        config_artifact = api.artifact(config_artifact_remote_name, type="config")
+
+        model_artifact.download()
+        config_artifact.download()
 
     (
         config,
@@ -118,7 +141,7 @@ if __name__ == "__main__":
         initial_communication_message_env_input,
         initial_communication_message,
         key,
-    ) = get_restored_actor(artifact_name)
+    ) = get_restored_actor(model_artifact_name, config_artifact_name)
 
     max_steps = config.env_config.kwargs.max_steps
     num_env = config.training_config.num_envs
