@@ -7,9 +7,9 @@ from beartype import beartype
 
 
 class CommunicationType(Enum):
-    HIDDEN_STATE = 1
-    PAST_ACTION = 2
-    CURRENT_ACTION = 3
+    HIDDEN_STATE = "HIDDEN_STATE"
+    PAST_ACTION = "PAST_ACTION"
+    CURRENT_ACTION = "CURRENT_ACTION"
 
 
 class EnvKwArgs(NamedTuple):
@@ -32,7 +32,7 @@ class EnvKwArgs(NamedTuple):
     ]
     entity_acceleration: int = 5
     one_time_death_reward: int = 15
-    agent_communication_type: CommunicationType = CommunicationType.CURRENT_ACTION
+    agent_communication_type: CommunicationType.value = None
     agent_control_noise_std: float = 0.2
 
 

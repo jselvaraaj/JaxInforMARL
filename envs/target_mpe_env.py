@@ -296,7 +296,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
     @partial(jax.jit, static_argnums=[0])
     def get_graph(self, state: MPEState) -> MultiAgentGraph:
 
-        if self.agent_communication_type == CommunicationType.HIDDEN_STATE:
+        if self.agent_communication_type == CommunicationType.HIDDEN_STATE.value:
             landmark_communication_message = jnp.zeros_like(
                 state.agent_communication_message
             )
@@ -304,8 +304,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 [state.agent_communication_message, landmark_communication_message]
             )
         elif (
-            self.agent_communication_type == CommunicationType.PAST_ACTION
-            or self.agent_communication_type == CommunicationType.CURRENT_ACTION
+            self.agent_communication_type == CommunicationType.PAST_ACTION.value
+            or self.agent_communication_type == CommunicationType.CURRENT_ACTION.value
         ):
             landmark_communication_message = jnp.zeros_like(
                 state.agent_communication_message

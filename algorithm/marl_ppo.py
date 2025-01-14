@@ -128,11 +128,11 @@ def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
     node_feature_dim = 7
     communication_type = config.env_config.env_kwargs.agent_communication_type
-    if communication_type == CommunicationType.HIDDEN_STATE:
+    if communication_type == CommunicationType.HIDDEN_STATE.value:
         node_feature_dim += config.network_config.gru_hidden_dim
     elif (
-        communication_type == CommunicationType.PAST_ACTION
-        or communication_type == CommunicationType.CURRENT_ACTION
+        communication_type == CommunicationType.PAST_ACTION.value
+        or communication_type == CommunicationType.CURRENT_ACTION.value
     ):
         node_feature_dim += 1
     nodes = jnp.zeros(
@@ -236,11 +236,11 @@ def get_init_communication_message(config: MAPPOConfig, env, ac_init_h_state):
     num_env = config.training_config.num_envs
 
     initial_communication_message = jnp.asarray([])
-    if communication_type == CommunicationType.HIDDEN_STATE:
+    if communication_type == CommunicationType.HIDDEN_STATE.value:
         initial_communication_message = ac_init_h_state
     elif (
-        communication_type == CommunicationType.PAST_ACTION
-        or communication_type == CommunicationType.CURRENT_ACTION
+        communication_type == CommunicationType.PAST_ACTION.value
+        or communication_type == CommunicationType.CURRENT_ACTION.value
     ):
         initial_communication_message = jnp.full(
             (config.derived_values.num_actors, 1), -1
@@ -362,11 +362,11 @@ def _env_step(
 
     initial_agent_communication_message = initial_communication_message
     agent_communication_message = initial_agent_communication_message
-    if communication_type == CommunicationType.HIDDEN_STATE:
+    if communication_type == CommunicationType.HIDDEN_STATE.value:
         agent_communication_message = last_communication_message.reshape(
             num_env, env.num_agents, *last_communication_message.shape[1:]
         )
-    elif communication_type == CommunicationType.PAST_ACTION:
+    elif communication_type == CommunicationType.PAST_ACTION.value:
         agent_communication_message = last_communication_message.reshape(
             num_env, env.num_agents, *last_communication_message.shape[1:]
         )
@@ -388,7 +388,7 @@ def _env_step(
     )
     action = pi.sample(seed=_rng)
 
-    if communication_type == CommunicationType.CURRENT_ACTION:
+    if communication_type == CommunicationType.CURRENT_ACTION.value:
         agent_communication_message = action.reshape(
             num_env, env.num_agents, *last_communication_message.shape[1:]
         )
@@ -437,11 +437,11 @@ def _env_step(
         done, env.agent_labels, config.derived_values.num_actors
     ).squeeze()
 
-    if communication_type == CommunicationType.HIDDEN_STATE:
+    if communication_type == CommunicationType.HIDDEN_STATE.value:
         last_communication_message = ac_h_state
     elif (
-        communication_type == CommunicationType.PAST_ACTION
-        or communication_type == CommunicationType.CURRENT_ACTION
+        communication_type == CommunicationType.PAST_ACTION.value
+        or communication_type == CommunicationType.CURRENT_ACTION.value
     ):
         last_communication_message = action.squeeze()[..., None]
 
