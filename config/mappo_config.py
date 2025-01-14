@@ -3,8 +3,6 @@ from __future__ import annotations
 from enum import Enum
 from typing import NamedTuple, Literal
 
-from beartype import beartype
-
 
 class CommunicationType(Enum):
     HIDDEN_STATE = "HIDDEN_STATE"
@@ -113,7 +111,6 @@ class DerivedValues(NamedTuple):
     scaled_clip_eps: float
 
 
-@beartype
 class MAPPOConfig(NamedTuple):
     env_config: EnvConfig
     training_config: TrainingConfig
