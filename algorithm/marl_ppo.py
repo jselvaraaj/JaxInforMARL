@@ -3,7 +3,6 @@ Built off JaxMARL( https://github.com/FLAIROx/JaxMARL) baselines/MAPPO/mappo_rnn
 """
 
 import os
-from collections import namedtuple
 from functools import partial
 from typing import NamedTuple, cast, Any
 
@@ -44,6 +43,20 @@ class Transition(NamedTuple):
     graph: GraphsTupleWithAgentIndex
     world_state: jnp.ndarray
     info: jnp.ndarray
+
+
+class TransitionWithEnvState(NamedTuple):
+    global_done: jnp.ndarray
+    done: jnp.ndarray
+    action: jnp.ndarray
+    value: jnp.ndarray
+    reward: jnp.ndarray
+    log_prob: jnp.ndarray
+    obs: jnp.ndarray
+    graph: GraphsTupleWithAgentIndex
+    world_state: jnp.ndarray
+    info: jnp.ndarray
+    env_state: LogEnvState
 
 
 def batchify(x: dict, agent_list, num_actors):
@@ -445,12 +458,13 @@ def _env_step(
         info,
     )
     if store_env_state:
-        TransitionWithEnvState = namedtuple(
-            "TransitionWithEnvState", Transition._fields + ("env_state",)
+        tiled_log_env_state = jax.tree.map(
+            lambda x: jnp.tile(x, (env.num_agents,) + (1,) * (x.ndim - 1)),
+            log_env_state,
         )
         transition = TransitionWithEnvState(
             *transition,
-            env_state=log_env_state,  # type: ignore
+            env_state=tiled_log_env_state,  # type: ignore
         )
     runner_state = EnvStepRunnerState(
         train_states,

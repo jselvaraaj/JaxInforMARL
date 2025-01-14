@@ -122,11 +122,14 @@ class MAPPOConfig(NamedTuple):
     derived_values: DerivedValues
 
     @classmethod
-    def create(cls) -> MAPPOConfig:
-        env_config = EnvConfig()
-        training_config = TrainingConfig()
-        network_config = NetworkConfig()
-        wandb_config = WandbConfig()
+    def create(
+        cls,
+        env_config=EnvConfig(),
+        training_config=TrainingConfig(),
+        network_config=NetworkConfig(),
+        wandb_config=WandbConfig(),
+        testing=False,
+    ) -> MAPPOConfig:
 
         num_actors = env_config.env_kwargs.num_agents * training_config.num_envs
         batch_size = num_actors * training_config.ppo_config.num_steps_per_update
@@ -146,9 +149,10 @@ class MAPPOConfig(NamedTuple):
                 else training_config.ppo_config.clip_eps
             ),
         )
-        assert (
-            _derived_values.num_updates > 0
-        ), "Number of updates per environment must be greater than 0."
+        if not testing:
+            assert (
+                _derived_values.num_updates > 0
+            ), "Number of updates per environment must be greater than 0."
 
         return cls(
             env_config=env_config,

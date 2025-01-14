@@ -1,13 +1,11 @@
-from functools import partial
 from typing import Optional
 
-import jax
-import jax.numpy as jnp
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from jaxtyping import Int, Array
+
+from calculate_metric import get_stats_for_state
 
 # Before creating your figure:
 sns.set_theme(style="dark", context="talk")  # or "darkgrid", "ticks", etc.
@@ -180,7 +178,7 @@ class MPEVisualizer(object):
             fontsize=fontsize,
         )
 
-        num_collisions, num_agent_died = self.get_stats(state)
+        num_collisions, num_agent_died = get_stats_for_state(self.env, state)
         self.collision_counter += num_collisions
         self.collision_counter_text = self.ax.text(
             -(ax_lim - 0.05),
@@ -213,7 +211,7 @@ class MPEVisualizer(object):
         if frame == 0:
             self.collision_counter = 0
 
-        num_collisions, num_agent_died = self.get_stats(state)
+        num_collisions, num_agent_died = get_stats_for_state(self.env, state)
         self.collision_counter += num_collisions
 
         self.step_counter.set_text(f"Step: {state.step}")
@@ -221,34 +219,3 @@ class MPEVisualizer(object):
         self.death_counter_text.set_text(f"Num deaths: {num_agent_died}")
 
         return self.entity_artists + [self.step_counter]
-
-    @partial(jax.jit, static_argnums=(0,))
-    def get_stats(self, state):
-        is_agent_dead = jax.vmap(self.env.is_there_overlap, in_axes=(0, 0, None))(
-            self.env.agent_indices, self.env.landmark_indices, state
-        )
-        num_collisions = (
-            jnp.sum(
-                self._collisions(self.env.agent_indices, self.env.agent_indices, state)
-                & ~is_agent_dead[..., None]
-            )
-            / 2
-        )
-
-        num_agent_died = jnp.sum(
-            jax.vmap(self.env.is_there_overlap, in_axes=(0, 0, None))(
-                self.env.agent_indices, self.env.landmark_indices, state
-            )
-        )
-        return num_collisions, num_agent_died
-
-    @partial(jax.jit, static_argnums=(0,))
-    @partial(jax.vmap, in_axes=(None, 0, None, None))
-    def _collisions(
-        self, agent_idx: Int[Array, "..."], other_idx: Int[Array, "..."], state
-    ):
-        return jax.vmap(self.env.is_collision, in_axes=(None, 0, None))(
-            agent_idx,
-            other_idx,
-            state,  # type: ignore
-        )

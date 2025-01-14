@@ -1,6 +1,7 @@
 import os
 from functools import partial
 from pathlib import Path
+from pprint import pprint
 
 import jax
 import jax.numpy as jnp
@@ -19,14 +20,28 @@ from algorithm.marl_ppo import (
     ActorAndCriticTrainStates,
     ActorAndCriticHiddenStates,
     EnvStepRunnerState,
+    TransitionWithEnvState,
 )
-from config.config_format_conversion import dict_to_config
+from config.config_format_conversion import dict_to_config, config_to_dict
+from config.mappo_config import MAPPOConfig
 from envs.mpe_visualizer import MPEVisualizer
 from model.actor_critic_rnn import GraphAttentionActorRNN, CriticRNN
 
 
-def get_restored_actor(model_artifact_name, config_dict):
+def get_restored_actor(model_artifact_name, config_dict, num_episodes):
     config = dict_to_config(config_dict)
+    config = config._replace(
+        training_config=config.training_config._replace(num_envs=num_episodes)
+    )
+    # This is so that the derived values are updated
+    config = MAPPOConfig.create(
+        env_config=config.env_config,
+        training_config=config.training_config,
+        network_config=config.network_config,
+        wandb_config=config.wandb_config,
+        testing=True,
+    )
+
     env = make_env_from_config(config)
     rng = jax.random.PRNGKey(config.training_config.seed)
 
@@ -93,18 +108,13 @@ def get_restored_actor(model_artifact_name, config_dict):
     )
 
 
-if __name__ == "__main__":
-
-    artifact_version = "215"
-
-    model_artifact_name = f"artifacts/PPO_RNN_Runner_State:v{artifact_version}"
-    model_artifact_remote_name = (
-        f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"
-    )
-
+def get_state_traj(
+    model_artifact_remote_name, artifact_version, num_episodes
+) -> (TransitionWithEnvState, MAPPOConfig):
     api = wandb.Api()
     model_artifact = api.artifact(model_artifact_remote_name, type="model")
 
+    model_artifact_name = f"artifacts/PPO_RNN_Runner_State:v{artifact_version}"
     if not Path(model_artifact_name).is_dir():
         model_artifact.download()
 
@@ -122,7 +132,10 @@ if __name__ == "__main__":
         initial_communication_message_env_input,
         initial_communication_message,
         key,
-    ) = get_restored_actor(model_artifact_name, config_dict)
+    ) = get_restored_actor(model_artifact_name, config_dict, num_episodes)
+
+    print("Config:")
+    pprint(config_to_dict(config))
 
     max_steps = config.env_config.env_kwargs.max_steps
     num_env = config.training_config.num_envs
@@ -197,7 +210,23 @@ if __name__ == "__main__":
     runner_state, traj_batch = jax.lax.scan(
         _env_step_with_static_args, env_step_runner_state, None, max_steps
     )
-    viz = MPEVisualizer(env._env._env, traj_batch.env_state.env_state, config)
+
+    return traj_batch, config, env._env._env
+
+
+if __name__ == "__main__":
+
+    artifact_version = "215"
+
+    model_artifact_remote_name = (
+        f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"
+    )
+
+    traj_batch, config, env = get_state_traj(
+        model_artifact_remote_name, artifact_version, num_episodes=1
+    )
+
+    viz = MPEVisualizer(env, traj_batch.env_state.env_state, config)
 
     viz.animate(view=True)
 
