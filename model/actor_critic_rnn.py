@@ -147,7 +147,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             key_received_attributes = key_received_attributes + key_edge_features
 
-            softmax_logits: Float[Array, "edge_id, edge_id"] = jnp.sum(
+            softmax_logits: Float[Array, "edge_id"] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=1
             ) / jnp.sqrt(self.config.network_config.graph_attention_key_dim)
 
@@ -249,7 +249,7 @@ class GraphAttentionActorRNN(nn.Module):
 
         agent_node_features = graph_embedding.nodes[
             jnp.arange(nodes.shape[0])[..., None],
-            jnp.arange(nodes.shape[1]),
+            jnp.arange(nodes.shape[1])[None, ...],
             agent_indices,
         ]
         obs = jnp.concatenate([obs, agent_node_features], axis=-1)

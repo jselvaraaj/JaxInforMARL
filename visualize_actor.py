@@ -216,14 +216,14 @@ def get_state_traj(
 
 if __name__ == "__main__":
 
-    artifact_version = "242"
+    artifact_version = "286"
 
     model_artifact_remote_name = (
         f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"
     )
 
     traj_batch, config, env = get_state_traj(
-        model_artifact_remote_name, artifact_version, num_episodes=1
+        model_artifact_remote_name, artifact_version, num_episodes=2
     )
 
     viz = MPEVisualizer(env, traj_batch.env_state.env_state, config)

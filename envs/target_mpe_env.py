@@ -71,7 +71,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
         dt: float = DT,
-        dist_to_goal_reward_ratio=0.5,
+        collision_reward=-5,
         agent_visibility_radius=None,
         agent_max_speed: int = 1,
         entity_acceleration=1,
@@ -143,10 +143,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         self.agent_visibility_radius = jnp.asarray(agent_visibility_radius)
 
-        assert (
-            0.0 <= dist_to_goal_reward_ratio <= 1.0
-        ), "local_ratio must be between 0.0 and 1.0"
-        self.dist_to_goal_reward_ratio = dist_to_goal_reward_ratio
+        assert collision_reward <= 0.0, "collision_reward must be less than 0"
+        self.collision_reward = collision_reward
 
         # self.communication_message_dim = communication_message_dim
         self.position_dim = position_dim
@@ -163,7 +161,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 jnp.full(self.num_landmarks, False),
             ]
         )
-        self.is_agent_silent = jnp.full(self.num_agents, 1)
         self.can_entity_collide = jnp.concatenate(
             [
                 jnp.full(self.num_agents, True),
@@ -239,14 +236,50 @@ class TargetMPEEnvironment(MultiAgentEnv):
             jax.random.choice(key_visibility_radius, self.agent_visibility_radius),
         )
 
+        @partial(jax.jit, static_argnums=(0,))
+        def sample_points(num_points, key, min_dist_between_points, bounds=(0, 1)):
+            def body_fun(state):
+                key, points, num_accepted = state
+                key, subkey = jax.random.split(key)
+                new_point = jax.random.uniform(
+                    subkey, (2,), minval=bounds[0], maxval=bounds[1]
+                )
+                distances = jnp.sqrt(jnp.sum((points - new_point) ** 2, axis=1))
+
+                # Create a boolean mask indicating which rows (points) are accepted
+                # i.e., from index 0 up to num_accepted-1.
+                mask = jnp.arange(num_points) < num_accepted
+
+                # "Ignore" distances for unaccepted slots by setting them to +inf
+                # so they won't affect the minimum-dist checks.
+                distances = jnp.where(mask, distances, jnp.inf)
+
+                is_valid = jnp.all(distances >= min_dist_between_points) | (
+                    num_accepted == 0
+                )
+
+                points = jax.lax.dynamic_update_slice(
+                    points, jnp.expand_dims(new_point, 0), (num_accepted, 0)
+                )
+                num_accepted += is_valid
+
+                return key, points, num_accepted
+
+            init_points = jnp.zeros((num_points, 2))
+            init_state = (key, init_points, 0)
+
+            final_state = jax.lax.while_loop(
+                lambda state: state[2] < num_points, body_fun, init_state
+            )
+
+            return final_state[1]
+
         entity_positions = jnp.concatenate(
             [
                 jax.random.uniform(
                     key_agent, (self.num_agents, 2), minval=-r, maxval=+r
                 ),
-                jax.random.uniform(
-                    key_landmark, (self.num_landmarks, 2), minval=-r, maxval=+r
-                ),
+                sample_points(self.num_landmarks, key_landmark, 0.25, bounds=(-r, +r)),
             ]
         )
 
@@ -662,8 +695,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         global_agent_collision_rew = -jnp.sum(agent_agent_collision)
 
         global_reward = (
-            self.dist_to_goal_reward_ratio * global_dist_rew
-            + (1 - self.dist_to_goal_reward_ratio) * global_agent_collision_rew
+            global_dist_rew + self.collision_reward * global_agent_collision_rew
         )
         one_time_reaching_goal_reward = jnp.sum(
             jax.lax.select(

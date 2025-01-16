@@ -19,19 +19,20 @@ class EnvKwArgs(NamedTuple):
     """
 
     num_agents: int = 3
-    max_steps: int = 50
-    dist_to_goal_reward_ratio: float = 0.30
+    max_steps: int = 25
+    collision_reward: float = -5
+    one_time_death_reward: int = 5
+    entity_acceleration: int = 5
+
     agent_max_speed: int = -1
     agent_visibility_radius: list[float] = [
-        1.5,
+        0.25,
     ]
     entities_initial_coord_radius: list[float] = [
-        2.5,
+        1,
     ]
-    entity_acceleration: int = 5
-    one_time_death_reward: int = 15
     agent_communication_type: CommunicationType.value = None
-    agent_control_noise_std: float = 0.2
+    agent_control_noise_std: float = 0.0
 
 
 class EnvConfig(NamedTuple):
@@ -52,7 +53,7 @@ class PPOConfig(NamedTuple):
 
     clip_eps: float = 0.2
     is_clip_eps_per_env: bool = False
-    max_grad_norm: float = 0.5
+    max_grad_norm: float = 10
     num_steps_per_update: int = 128
     num_minibatches_actors: int = 4
     update_epochs: int = 4
@@ -71,7 +72,7 @@ class TrainingConfig(NamedTuple):
 
     seed: int = 1
     num_seeds: int = 2
-    lr: float = 2e-3
+    lr: float = 5e-4
     anneal_lr: bool = True
     num_envs: int = 4
     gamma: float = 0.99
