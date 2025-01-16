@@ -89,8 +89,8 @@ class NetworkConfig(NamedTuple):
 
     entity_type_embedding_dim: int = 4
 
-    num_graph_attn_layers: int = 1
-    num_heads_per_attn_layer: int = 2
+    num_graph_attn_layers: int = 2
+    num_heads_per_attn_layer: int = 3
     graph_attention_key_dim: int = 8
 
     graph_num_linear_layer: int = 2
