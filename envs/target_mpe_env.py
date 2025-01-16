@@ -279,7 +279,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 jax.random.uniform(
                     key_agent, (self.num_agents, 2), minval=-r, maxval=+r
                 ),
-                sample_points(self.num_landmarks, key_landmark, 0.25, bounds=(-r, +r)),
+                sample_points(self.num_landmarks, key_landmark, 0.5, bounds=(-r, +r)),
             ]
         )
 

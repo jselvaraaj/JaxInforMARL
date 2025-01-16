@@ -2,7 +2,6 @@ from typing import Optional
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-import numpy as np
 import seaborn as sns
 
 from calculate_metric import get_stats_for_state
@@ -33,7 +32,6 @@ class MPEVisualizer(object):
         self.state_seq = state_seq
         self.reward_seq = reward_seq
 
-        self.comm_active = not np.all(self.env.is_agent_silent)
         self.entity_artists = []
         self.visibility_circle = []
         self.step_counter = None
