@@ -692,7 +692,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         dist_reward = _dist_between_target_reward(self.agent_indices, state)
 
         global_dist_rew = jnp.sum(dist_reward)
-        global_agent_collision_rew = -jnp.sum(agent_agent_collision)
+        global_agent_collision_rew = jnp.sum(agent_agent_collision)
 
         global_reward = (
             global_dist_rew + self.collision_reward * global_agent_collision_rew
