@@ -71,7 +71,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         position_dim: int = 2,
         max_steps: int = MAX_STEPS,
         dt: float = DT,
-        collision_reward=-5,
+        collision_reward_coefficient=-5,
         agent_visibility_radius=None,
         agent_max_speed: int = 1,
         entity_acceleration=1,
@@ -80,6 +80,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         agent_communication_type=None,
         agent_control_noise_std=0,
         add_self_edges_to_nodes=False,
+        distance_to_goal_reward_coefficient=5,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -130,6 +131,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         )
 
         self.one_time_death_reward = jnp.full((self.num_agents,), one_time_death_reward)
+        self.distance_to_goal_reward_coefficient = distance_to_goal_reward_coefficient
 
         self.observation_spaces = default(
             self.observation_spaces,
@@ -146,8 +148,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         self.agent_visibility_radius = jnp.asarray(agent_visibility_radius)
 
-        assert collision_reward <= 0.0, "collision_reward must be less than 0"
-        self.collision_reward = collision_reward
+        assert (
+            collision_reward_coefficient <= 0.0
+        ), "collision_reward must be less than 0"
+        self.collision_reward_coefficient = collision_reward_coefficient
 
         # self.communication_message_dim = communication_message_dim
         self.position_dim = position_dim
@@ -698,11 +702,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
         #     return rew
         dist_reward = _dist_between_target_reward(self.agent_indices, state)
 
-        global_dist_rew = jnp.sum(dist_reward)
+        global_dist_rew = self.distance_to_goal_reward_coefficient * jnp.sum(
+            dist_reward
+        )
         global_agent_collision_rew = jnp.sum(agent_agent_collision)
 
         global_reward = (
-            global_dist_rew + self.collision_reward * global_agent_collision_rew
+            global_dist_rew
+            + self.collision_reward_coefficient * global_agent_collision_rew
         )
         one_time_reaching_goal_reward = jnp.sum(
             jax.lax.select(
