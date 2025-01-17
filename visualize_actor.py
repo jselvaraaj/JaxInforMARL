@@ -216,7 +216,7 @@ def get_state_traj(
 
 if __name__ == "__main__":
 
-    artifact_version = "309"
+    artifact_version = "343"
 
     model_artifact_remote_name = (
         f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"

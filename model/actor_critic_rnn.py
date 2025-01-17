@@ -109,14 +109,14 @@ class GraphMultiHeadAttentionLayer(nn.Module):
                     kernel_init=orthogonal(jnp.sqrt(2)),
                     bias_init=constant(0.0),
                 )(x)
+                x = nn.LayerNorm(
+                    scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
+                )(x)
                 x = nn.relu(x)
             x = nn.Dense(
                 self.config.network_config.graph_hidden_feature_dim,
                 kernel_init=orthogonal(jnp.sqrt(2)),
                 bias_init=constant(0.0),
-            )(x)
-            x = nn.LayerNorm(
-                scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
             )(x)
             x = nn.relu(x)
             return x
@@ -156,7 +156,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
                 softmax_logits, segment_ids=receivers, num_segments=sum_n_node
             )
             # Apply weights
-            messages = weights[..., None] * (sent_attributes + edge_features)
+            messages = weights[..., None] * sent_attributes
             # Aggregate messages to nodes.
             nodes_seg_sum = jax.ops.segment_sum(
                 messages, receivers, num_segments=sum_n_node
@@ -284,9 +284,6 @@ class CriticRNN(nn.Module):
             kernel_init=orthogonal(jnp.sqrt(2)),
             bias_init=constant(0.0),
         )(world_state)
-        embedding = nn.LayerNorm(
-            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
-        )(embedding)
         embedding = nn.relu(embedding)
 
         rnn_in = (embedding, dones)
@@ -304,9 +301,6 @@ class CriticRNN(nn.Module):
             self.config.network_config.gru_hidden_dim,
             kernel_init=orthogonal(2),
             bias_init=constant(0.0),
-        )(embedding)
-        embedding = nn.LayerNorm(
-            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
         )(embedding)
         embedding = nn.relu(embedding)
 

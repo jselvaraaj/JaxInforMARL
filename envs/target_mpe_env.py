@@ -79,6 +79,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         one_time_death_reward=2,
         agent_communication_type=None,
         agent_control_noise_std=0,
+        add_self_edges_to_nodes=False,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -109,6 +110,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.landmark_labels_to_index = entity_labels_to_indices(
             self.landmark_labels, start=self.num_agents
         )
+
+        self.add_self_edges_to_nodes = add_self_edges_to_nodes
 
         assert action_type in [DISCRETE_ACT, CONTINUOUS_ACT], "Invalid action type"
         if action_type == DISCRETE_ACT:
@@ -387,10 +390,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
         # Broadcast to shape: (num_agents, num_entities, 2)
         # distances shape: (num_agents, num_entities)
         distances = jnp.linalg.norm(
-            agent_positions[:, None, :] - entity_positions[None, :, :], axis=-1
+            agent_positions[:, None] - entity_positions[None, :], axis=-1
         )
         mask = distances <= state.agent_visibility_radius[:, None]
-        max_num_edge = self.num_entities * (self.num_entities - 1)
+
+        if not self.add_self_edges_to_nodes:
+            mask = mask.at[self.agent_indices, self.agent_indices].set(0)
+
+        max_num_edge = self.num_agents * self.num_entities
         valid_agent_idx, valid_entity_idx = jnp.nonzero(
             mask, size=max_num_edge, fill_value=-1
         )
