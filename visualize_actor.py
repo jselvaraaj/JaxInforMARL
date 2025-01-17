@@ -33,10 +33,14 @@ def get_restored_actor(model_artifact_name, config_dict, num_episodes):
     config = config._replace(
         training_config=config.training_config._replace(num_envs=num_episodes)
     )
+    t_c = config.training_config
+    t_c = t_c._replace(seed=65)
+    e_c = config.env_config
+    e_c = e_c._replace(env_kwargs=e_c.env_kwargs._replace(max_steps=100))
     # This is so that the derived values are updated
     config = MAPPOConfig.create(
-        env_config=config.env_config,
-        training_config=config.training_config,
+        env_config=e_c,
+        training_config=t_c,
         network_config=config.network_config,
         wandb_config=config.wandb_config,
         testing=True,
@@ -216,7 +220,7 @@ def get_state_traj(
 
 if __name__ == "__main__":
 
-    artifact_version = "343"
+    artifact_version = "381"
 
     model_artifact_remote_name = (
         f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"

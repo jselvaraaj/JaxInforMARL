@@ -52,9 +52,6 @@ class ActorRNN(nn.Module):
             kernel_init=orthogonal(jnp.sqrt(2)),
             bias_init=constant(0.0),
         )(obs)
-        embedding = nn.LayerNorm(
-            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
-        )(embedding)
         embedding = nn.relu(embedding)
 
         rnn_in = (embedding, dones)
@@ -72,9 +69,6 @@ class ActorRNN(nn.Module):
             self.config.network_config.gru_hidden_dim,
             kernel_init=orthogonal(2),
             bias_init=constant(0.0),
-        )(embedding)
-        embedding = nn.LayerNorm(
-            scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
         )(embedding)
         embedding = nn.relu(embedding)
 
@@ -108,9 +102,6 @@ class GraphMultiHeadAttentionLayer(nn.Module):
                     self.config.network_config.graph_hidden_feature_dim,
                     kernel_init=orthogonal(jnp.sqrt(2)),
                     bias_init=constant(0.0),
-                )(x)
-                x = nn.LayerNorm(
-                    scale_init=nn.initializers.ones, bias_init=nn.initializers.zeros
                 )(x)
                 x = nn.relu(x)
             x = nn.Dense(
