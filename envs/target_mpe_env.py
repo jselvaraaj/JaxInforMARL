@@ -230,6 +230,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self,
         key: PRNGKey,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MPEState]:
         """Initialise with random positions"""
 
@@ -281,14 +282,19 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
             return final_state[1]
 
-        entity_positions = jnp.concatenate(
-            [
-                jax.random.uniform(
-                    key_agent, (self.num_agents, 2), minval=-r, maxval=+r
-                ),
-                sample_points(self.num_landmarks, key_landmark, 0.5, bounds=(-r, +r)),
-            ]
-        )
+        if initial_entity_position.size == 0:
+            entity_positions = jnp.concatenate(
+                [
+                    jax.random.uniform(
+                        key_agent, (self.num_agents, 2), minval=-r, maxval=+r
+                    ),
+                    sample_points(
+                        self.num_landmarks, key_landmark, 0.5, bounds=(-r, +r)
+                    ),
+                ]
+            )
+        else:
+            entity_positions = initial_entity_position
 
         state = MPEState(
             entity_positions=entity_positions,
@@ -399,7 +405,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         mask = distances <= state.agent_visibility_radius[:, None]
 
         if not self.add_self_edges_to_nodes:
-            mask = mask.at[self.agent_indices, self.agent_indices].set(0)
+            mask = mask.at[self.agent_indices, self.agent_indices].set(False)
 
         max_num_edge = self.num_agents * self.num_entities
         valid_agent_idx, valid_entity_idx = jnp.nonzero(

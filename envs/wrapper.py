@@ -20,6 +20,7 @@ from envs.schema import (
     MultiAgentReward,
     MultiAgentGraph,
     AgentIndex,
+    EntityIndex,
 )
 
 
@@ -42,8 +43,11 @@ class MARLWrapper(MultiAgentEnv):
         self,
         key: PRNGKey,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MultiAgentState]:
-        return self._env.reset(key, initial_agent_communication_message)
+        return self._env.reset(
+            key, initial_agent_communication_message, initial_entity_position
+        )
 
     def _step(
         self,
@@ -78,8 +82,11 @@ class MPEWorldStateWrapper(MARLWrapper):
         self,
         key,
         agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ):
-        obs, graph, env_state = self._env.reset(key, agent_communication_message)
+        obs, graph, env_state = self._env.reset(
+            key, agent_communication_message, initial_entity_position
+        )
         obs["world_state"] = self.world_state(obs)
         return obs, graph, env_state
 
@@ -90,9 +97,14 @@ class MPEWorldStateWrapper(MARLWrapper):
         state,
         action,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ):
         obs, graph, env_state, reward, done, info = self._env.step(
-            key, state, action, initial_agent_communication_message
+            key,
+            state,
+            action,
+            initial_agent_communication_message,
+            initial_entity_position,
         )
         obs["world_state"] = self.world_state(obs)
         return obs, graph, env_state, reward, done, info
@@ -137,9 +149,10 @@ class LogWrapper(MARLWrapper):
         self,
         key: PRNGKey,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, LogEnvState]:
         obs, graph, env_state = self._env.reset(
-            key, initial_agent_communication_message
+            key, initial_agent_communication_message, initial_entity_position
         )
         state = LogEnvState(
             env_state,
@@ -157,6 +170,7 @@ class LogWrapper(MARLWrapper):
         state: LogEnvState,
         action: MultiAgentAction,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -166,7 +180,11 @@ class LogWrapper(MARLWrapper):
         Info,
     ]:
         obs, graph, env_state, reward, done, info = self._env.step(
-            key, state.env_state, action, initial_agent_communication_message
+            key,
+            state.env_state,
+            action,
+            initial_agent_communication_message,
+            initial_entity_position,
         )
         ep_done = done["__all__"]
         new_episode_return = state.episode_returns + self._batchify_floats(reward)
@@ -199,6 +217,7 @@ class MPELogWrapper(LogWrapper):
         state: LogEnvState,
         action: MultiAgentAction,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -208,7 +227,11 @@ class MPELogWrapper(LogWrapper):
         Info,
     ]:
         obs, graph, env_state, reward, done, info = self._env.step(
-            key, state.env_state, action, initial_agent_communication_message
+            key,
+            state.env_state,
+            action,
+            initial_agent_communication_message,
+            initial_entity_position,
         )
         reward_log = jax.tree.map(
             lambda x: x * self._env.num_agents, reward

@@ -13,6 +13,7 @@ from .schema import (
     MultiAgentObservation,
     MultiAgentGraph,
     AgentIndex,
+    EntityIndex,
 )
 from .spaces import Space
 
@@ -81,6 +82,7 @@ class MultiAgentEnv(ABC):
         self,
         key: PRNGKey,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ):
         """Performs resetting of the environment."""
 
@@ -100,6 +102,7 @@ class MultiAgentEnv(ABC):
         state: MultiAgentState,
         actions: MultiAgentAction,
         initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
     ):
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.
@@ -109,7 +112,7 @@ class MultiAgentEnv(ABC):
         key, key_reset = jax.random.split(key)
 
         obs_reset, graph_reset, states_reset = self.reset(
-            key_reset, initial_agent_communication_message
+            key_reset, initial_agent_communication_message, initial_entity_position
         )
 
         # Auto-reset environment based on termination

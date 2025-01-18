@@ -113,7 +113,10 @@ def get_restored_actor(model_artifact_name, config_dict, num_episodes):
 
 
 def get_state_traj(
-    model_artifact_remote_name, artifact_version, num_episodes
+    model_artifact_remote_name,
+    artifact_version,
+    num_episodes,
+    initial_entity_position=None,
 ) -> (TransitionWithEnvState, MAPPOConfig):
     api = wandb.Api()
     model_artifact = api.artifact(model_artifact_remote_name, type="model")
@@ -148,13 +151,17 @@ def get_state_traj(
 
     env_key = jax.random.split(key_r, num_env)
 
+    if initial_entity_position is None:
+        initial_entity_position = jnp.asarray([])
+
     obs_v, graph_v, env_state = jax.vmap(
         env.reset,
         in_axes=(
             0,
             0 if initial_communication_message_env_input.size != 0 else None,
+            0 if initial_entity_position.size != 0 else None,
         ),
-    )(env_key, initial_communication_message_env_input)
+    )(env_key, initial_communication_message_env_input, initial_entity_position)
 
     key, _rng = jax.random.split(key, 2)
 
@@ -195,6 +202,7 @@ def get_state_traj(
         jnp.zeros(config.derived_values.num_actors, dtype=bool),
         actor_critic_hidden_state,
         initial_communication_message,
+        initial_entity_position,
         _rng,
     )
 
@@ -220,7 +228,7 @@ def get_state_traj(
 
 if __name__ == "__main__":
 
-    artifact_version = "399"
+    artifact_version = "421"
 
     model_artifact_remote_name = (
         f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"

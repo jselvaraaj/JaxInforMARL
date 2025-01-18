@@ -26,7 +26,7 @@ from config.mappo_config import (
     CommunicationType,
 )
 from envs.multiagent_env import MultiAgentEnv
-from envs.schema import MultiAgentGraph, MultiAgentObservation, PRNGKey
+from envs.schema import MultiAgentGraph, MultiAgentObservation, PRNGKey, EntityIndex
 from envs.target_mpe_env import GraphsTupleWithAgentIndex
 from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper, LogEnvState
 from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphAttentionActorRNN
@@ -305,6 +305,7 @@ class EnvStepRunnerState(NamedTuple):
     dones: Array
     hidden_states: ActorAndCriticHiddenStates
     communication_message: Float[Array, "..."]
+    initial_entity_position: Float[Array, f"{EntityIndex} ..."]
     rng_keys: PRNGKey
 
 
@@ -350,6 +351,7 @@ def _env_step(
         last_done,
         h_states,
         last_communication_message,
+        initial_entity_position,
         rng,
     ) = runner_state
 
@@ -424,6 +426,7 @@ def _env_step(
         log_env_state,
         env_act,
         initial_agent_communication_message,
+        initial_entity_position,
     )
     env_in_axes = jax.tree.map(lambda leaf: 0 if leaf.size != 0 else None, env_input)
     obs_v, graph_v, log_env_state, reward, done, info = jax.vmap(
@@ -474,6 +477,7 @@ def _env_step(
         done_batch,
         ActorAndCriticHiddenStates(ac_h_state, cr_h_state),
         last_communication_message,
+        initial_entity_position,
         rng,
     )
     return runner_state, transition
@@ -696,7 +700,8 @@ def ppo_single_update(
         last_graph,
         last_done,
         h_states,
-        last_actions,
+        last_communication_message,
+        entity_initial_position,
         rng,
     ) = runner_state
 
@@ -826,7 +831,8 @@ def ppo_single_update(
         last_graph,
         last_done,
         actor_critic_hidden_states,
-        last_actions,
+        last_communication_message,
+        entity_initial_position,
         rng,
     )
     return UpdateStepRunnerState(runner_state, update_steps), metric
@@ -912,13 +918,15 @@ def make_train(config: MAPPOConfig):
         initial_communication_message, initial_communication_message_env_input = (
             get_init_communication_message(config, env, ac_init_h_state)
         )
+        initial_entity_position = jnp.asarray([])
         obs_v, graph_v, env_state = jax.vmap(
             env.reset,
             in_axes=(
                 0,
                 0 if initial_communication_message_env_input.size != 0 else None,
+                None,
             ),
-        )(reset_rng, initial_communication_message_env_input)
+        )(reset_rng, initial_communication_message_env_input, initial_entity_position)
 
         rng, _rng = jax.random.split(rng)
         actor_critic_train_states = ActorAndCriticTrainStates(
@@ -935,6 +943,7 @@ def make_train(config: MAPPOConfig):
             jnp.zeros(config.derived_values.num_actors, dtype=bool),
             actor_critic_hidden_state,
             initial_communication_message,
+            initial_entity_position,
             _rng,
         )
         update_step_static_args = StaticVariables(
