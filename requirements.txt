@@ -9,6 +9,10 @@ wandb
 
 # Visualization
 seaborn
+plotly
+dash
+dash-bootstrap-components
+
 
 # JAX
     # Types

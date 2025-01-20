@@ -1,4 +1,5 @@
 from functools import partial
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -49,6 +50,11 @@ class MPEState(MultiAgentState, struct.PyTreeNode):
     did_agent_die_this_time_step: Float[Array, f"{AgentIndex}"]
     agent_communication_message: Float[Array, f"{AgentIndex} ..."] | None
     agent_visibility_radius: Float[Array, f"{AgentIndex}"]
+
+
+class LinSpaceConfig(NamedTuple):
+    lin_range: tuple[int, int]
+    lin_step: float
 
 
 class TargetMPEEnvironment(MultiAgentEnv):
@@ -194,6 +200,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.contact_force = CONTACT_FORCE
         self.contact_margin = CONTACT_MARGIN
 
+    # noinspection DuplicatedCode
     @partial(jax.vmap, in_axes=[None, 0, 0])
     def _discrete_action_to_control_input(
         self,
@@ -743,3 +750,54 @@ class TargetMPEEnvironment(MultiAgentEnv):
             & (self.can_entity_collide[a] & self.can_entity_collide[b])
             & (a != b)
         )
+
+    @partial(jax.vmap, in_axes=(None, None, 0), out_axes=1)
+    @partial(jax.jit, static_argnums=(0, 1))
+    def get_viz_states(self, lin_space_config: LinSpaceConfig, state: MPEState):
+
+        # only produce grid mesh for first agent assuming other agents state are fixed.
+        agent_idx = self.agent_indices[0]
+
+        @partial(jax.vmap, in_axes=(None, 0, 0))
+        def get_states_for_each_coord(state: MPEState, x: Array, y: Array) -> MPEState:
+            return state.replace(
+                entity_positions=state.entity_positions.at[agent_idx, 0]
+                .set(x)
+                .at[agent_idx, 1]
+                .set(y)
+            )
+
+        x_lin_space = jnp.arange(
+            start=lin_space_config.lin_range[0],
+            stop=lin_space_config.lin_range[1],
+            step=lin_space_config.lin_step,
+        )
+        y_lin_space = jnp.arange(
+            start=lin_space_config.lin_range[0],
+            stop=lin_space_config.lin_range[1],
+            step=lin_space_config.lin_step,
+        )
+        x_v, y_v = jnp.meshgrid(x_lin_space, y_lin_space)
+
+        x_v = x_v.flatten()
+        y_v = y_v.flatten()
+
+        return get_states_for_each_coord(state, x_v, y_v)
+
+    # noinspection DuplicatedCode
+    @partial(jax.vmap, in_axes=[None, 0])
+    def discrete_action_to_viz_vector(
+        self,
+        action: Int[Array, f"..."],
+    ) -> Float[Array, f"{AgentIndex} {CoordinateAxisIndex}"]:
+        u = jnp.zeros((self.position_dim,))
+        x_axis = 0
+        y_axis = 1
+        action_to_coordinate_axis = jax.lax.select(action <= 2, x_axis, y_axis)
+        increase_position = 1.0
+        decrease_position = -1.0
+        u_val = jax.lax.select(
+            action % 2 == 0, increase_position, decrease_position
+        ) * (action != 0)
+        u = u.at[action_to_coordinate_axis].set(u_val)
+        return u

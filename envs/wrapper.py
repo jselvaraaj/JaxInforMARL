@@ -74,6 +74,9 @@ class MARLWrapper(MultiAgentEnv):
     def num_entities(self):
         return self._env.num_entities
 
+    def get_viz_states(self, *args, **kwargs):
+        return self._env.get_viz_states(*args, **kwargs)
+
 
 class MPEWorldStateWrapper(MARLWrapper):
 

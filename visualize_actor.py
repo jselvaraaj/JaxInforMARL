@@ -8,7 +8,9 @@ import jax.numpy as jnp
 import optax
 import orbax
 import wandb
+from beartype.door import is_bearable
 from flax.training.train_state import TrainState
+from jaxtyping import Array
 
 from algorithm.marl_ppo import (
     make_env_from_config,
@@ -20,7 +22,7 @@ from algorithm.marl_ppo import (
     ActorAndCriticTrainStates,
     ActorAndCriticHiddenStates,
     EnvStepRunnerState,
-    TransitionWithEnvState,
+    TransitionForVisualization,
 )
 from config.config_format_conversion import dict_to_config, config_to_dict
 from config.mappo_config import MAPPOConfig
@@ -115,9 +117,10 @@ def get_restored_actor(model_artifact_name, config_dict, num_episodes):
 def get_state_traj(
     model_artifact_remote_name,
     artifact_version,
-    num_episodes,
     initial_entity_position=None,
-) -> (TransitionWithEnvState, MAPPOConfig):
+    store_action_field=False,
+    num_episodes=2,
+) -> (TransitionForVisualization, MAPPOConfig):
     api = wandb.Api()
     model_artifact = api.artifact(model_artifact_remote_name, type="model")
 
@@ -153,6 +156,12 @@ def get_state_traj(
 
     if initial_entity_position is None:
         initial_entity_position = jnp.asarray([])
+    else:
+        assert is_bearable(
+            initial_entity_position, Array
+        ), "initial_entity_position must be a jax array"
+
+        initial_entity_position = jnp.stack([initial_entity_position] * num_env)
 
     obs_v, graph_v, env_state = jax.vmap(
         env.reset,
@@ -206,17 +215,17 @@ def get_state_traj(
         _rng,
     )
 
-    store_env_state = True
+    is_running_in_viz_mode = True
     _env_step_with_static_args = partial(
         _env_step,
         StaticVariables(
             env,
             config,
             actor_network,
-            ac_init_h_state,
             critic_network,
             initial_communication_message_env_input,
-            store_env_state,
+            is_running_in_viz_mode,
+            store_action_field,
         ),
     )
     runner_state, traj_batch = jax.lax.scan(
