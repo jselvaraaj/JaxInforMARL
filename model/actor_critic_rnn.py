@@ -1,4 +1,5 @@
 import functools
+from typing import Literal
 
 import distrax
 import flax.linen as nn
@@ -6,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import jraph
 from flax.linen.initializers import constant, orthogonal
-from jaxtyping import Float, Array
+from jaxtyping import Array, Float
 from jraph._src import utils
 
 from config.mappo_config import MAPPOConfig
@@ -138,7 +139,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             key_received_attributes = key_received_attributes + key_edge_features
 
-            softmax_logits: Float[Array, "edge_id"] = jnp.sum(
+            softmax_logits: Float[Array, Literal["edge_id"]] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=1
             ) / jnp.sqrt(self.config.network_config.graph_attention_key_dim)
 

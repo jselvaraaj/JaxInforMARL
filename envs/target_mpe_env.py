@@ -374,13 +374,19 @@ class TargetMPEEnvironment(MultiAgentEnv):
         def get_node_feature(
             entity_idx: Int[Array, EntityIndexAxis],
             agent_id: Int[Array, AgentIndexAxis],
-        ) -> Int[Array, f"{EntityIndexAxis} 7"]:
+        ) -> Int[Array, f"{AgentIndexAxis} {EntityIndexAxis}  7"]:
             goal_idx = jnp.where(
                 entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
             )
 
             goal_relative_coord = (
                 state.entity_positions[goal_idx] - state.entity_positions[agent_id]
+            )
+            relative_position = (
+                state.entity_positions[entity_idx] - state.entity_positions[agent_id]
+            )
+            relative_velocity = (
+                state.entity_velocities[entity_idx] - state.entity_velocities[agent_id]
             )
             entity_type = jnp.where(
                 entity_idx < self.num_agents,
@@ -394,8 +400,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 (
                     [
                         node_communication_message,
-                        state.entity_positions[entity_idx],
-                        state.entity_velocities[entity_idx],
+                        relative_position,
+                        relative_velocity,
                         goal_relative_coord,
                         jnp.array([entity_type]),
                     ]
