@@ -4,7 +4,7 @@ Built off JaxMARL( https://github.com/FLAIROx/JaxMARL) baselines/MAPPO/mappo_rnn
 
 import os
 from functools import partial
-from typing import NamedTuple, cast, Any
+from typing import Any, NamedTuple, cast
 
 import distrax
 import jax
@@ -17,19 +17,21 @@ from beartype import beartype
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from jax import block_until_ready
-from jaxtyping import Array, jaxtyped, Float
+from jaxtyping import Array, Float, jaxtyped
 
 import envs
 from config.config_format_conversion import config_to_dict
 from config.mappo_config import (
-    MAPPOConfig as MAPPOConfig,
     CommunicationType,
 )
+from config.mappo_config import (
+    MAPPOConfig as MAPPOConfig,
+)
 from envs.multiagent_env import MultiAgentEnv
-from envs.schema import MultiAgentGraph, MultiAgentObservation, PRNGKey, EntityIndex
+from envs.schema import EntityIndex, MultiAgentGraph, MultiAgentObservation, PRNGKey
 from envs.target_mpe_env import GraphsTupleWithAgentIndex, LinSpaceConfig
-from envs.wrapper import MPEWorldStateWrapper, MPELogWrapper, LogEnvState
-from model.actor_critic_rnn import CriticRNN, ScannedRNN, GraphAttentionActorRNN
+from envs.wrapper import LogEnvState, MPELogWrapper, MPEWorldStateWrapper
+from model.actor_critic_rnn import CriticRNN, GraphAttentionActorRNN, ScannedRNN
 
 
 class Transition(NamedTuple):
@@ -222,7 +224,11 @@ def get_actor_init_input(config: MAPPOConfig, env):
         num_actors, config.network_config.gru_hidden_dim
     )
 
-    return ac_init_x, ac_init_h_state, graph_init
+    return (
+        ac_init_x,
+        ac_init_h_state,
+        graph_init,
+    )
 
 
 def get_critic_init_input(config: MAPPOConfig, env, graph_init):
@@ -402,7 +408,7 @@ def _env_step(
     if is_running_in_viz_mode and store_action_field:
         rng, lin_space_rng = jax.random.split(rng)
         lin_space_env_state = env.get_viz_states(
-            LinSpaceConfig(lin_range=(-2, 2), lin_step=0.2), log_env_state.env_state
+            LinSpaceConfig(lin_range=(-10, 10), lin_step=0.4), log_env_state.env_state
         )
 
         @partial(jax.vmap)
@@ -857,7 +863,7 @@ def ppo_single_update(
             dict_config = config_to_dict(config)
 
             model_artifact = wandb.Artifact(
-                f"PPO_RNN_Runner_State",
+                "PPO_RNN_Runner_State",
                 type="model",
                 metadata=dict_config,
             )
@@ -1065,7 +1071,7 @@ def main():
 
     if config.wandb_config.save_model:
         model_artifact = wandb.Artifact(
-            f"PPO_RNN_Runner_State", type="model", metadata=dict_config
+            "PPO_RNN_Runner_State", type="model", metadata=dict_config
         )
         running_script_path = os.path.abspath(".")
         checkpoint_dir = os.path.join(
