@@ -336,7 +336,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
             return jnp.concatenate(
                 [
-                    agent_position.flatten(),
                     agent_velocity.flatten(),
                     landmark_relative_position.flatten(),
                 ]
