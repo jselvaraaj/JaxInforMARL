@@ -1,4 +1,4 @@
-from typing import TypeAlias, NamedTuple
+from typing import NamedTuple, TypeAlias
 
 from beartype import beartype as typechecker
 from flax import struct
@@ -26,16 +26,18 @@ MultiAgentGraph: TypeAlias = dict[AgentLabel, GraphsTupleWithAgentIndex]
 MultiAgentDone: TypeAlias = dict[AgentLabel, Bool]
 Info: TypeAlias = dict
 
+EntityIndex = int
+
 
 # Used in JAX Arrays
-EntityIndex = "entity_index"
-AgentIndex = "agent_index"
-CoordinateAxisIndex = "position_index"
+EntityIndexAxis = "entity_index"
+AgentIndexAxis = "agent_index"
+CoordinateAxisIndexAxis = "position_index"
 
 
 @jaxtyped(typechecker=typechecker)
 class MultiAgentState(struct.PyTreeNode):
-    dones: Bool[Array, AgentIndex]
+    dones: Bool[Array, AgentIndexAxis]
     step: int
 
 

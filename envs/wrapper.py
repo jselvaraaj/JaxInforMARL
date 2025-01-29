@@ -7,20 +7,20 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from flax import struct
-from jaxtyping import Float, Array
+from jaxtyping import Array, Float
 
 from envs.multiagent_env import MultiAgentEnv
 from envs.schema import (
-    MultiAgentState,
-    PRNGKey,
-    MultiAgentObservation,
+    AgentIndexAxis,
+    EntityIndexAxis,
+    Info,
     MultiAgentAction,
     MultiAgentDone,
-    Info,
-    MultiAgentReward,
     MultiAgentGraph,
-    AgentIndex,
-    EntityIndex,
+    MultiAgentObservation,
+    MultiAgentReward,
+    MultiAgentState,
+    PRNGKey,
 )
 
 
@@ -42,8 +42,8 @@ class MARLWrapper(MultiAgentEnv):
     def reset(
         self,
         key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MultiAgentState]:
         return self._env.reset(
             key, initial_agent_communication_message, initial_entity_position
@@ -84,8 +84,8 @@ class MPEWorldStateWrapper(MARLWrapper):
     def reset(
         self,
         key,
-        agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         obs, graph, env_state = self._env.reset(
             key, agent_communication_message, initial_entity_position
@@ -99,8 +99,8 @@ class MPEWorldStateWrapper(MARLWrapper):
         key,
         state,
         action,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         obs, graph, env_state, reward, done, info = self._env.step(
             key,
@@ -151,8 +151,8 @@ class LogWrapper(MARLWrapper):
     def reset(
         self,
         key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, LogEnvState]:
         obs, graph, env_state = self._env.reset(
             key, initial_agent_communication_message, initial_entity_position
@@ -172,8 +172,8 @@ class LogWrapper(MARLWrapper):
         key: PRNGKey,
         state: LogEnvState,
         action: MultiAgentAction,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -219,8 +219,8 @@ class MPELogWrapper(LogWrapper):
         key: PRNGKey,
         state: LogEnvState,
         action: MultiAgentAction,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,

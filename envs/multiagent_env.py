@@ -1,19 +1,19 @@
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from functools import partial
 
 import jax
-from jaxtyping import Float, Array
+from jaxtyping import Array, Float
 
 from .schema import (
-    PRNGKey,
-    MultiAgentState,
+    AgentIndexAxis,
     AgentLabel,
-    MultiAgentAction,
+    EntityIndexAxis,
     EntityLabel,
-    MultiAgentObservation,
+    MultiAgentAction,
     MultiAgentGraph,
-    AgentIndex,
-    EntityIndex,
+    MultiAgentObservation,
+    MultiAgentState,
+    PRNGKey,
 )
 from .spaces import Space
 
@@ -81,8 +81,8 @@ class MultiAgentEnv(ABC):
     def reset(
         self,
         key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         """Performs resetting of the environment."""
 
@@ -101,8 +101,8 @@ class MultiAgentEnv(ABC):
         key: PRNGKey,
         state: MultiAgentState,
         actions: MultiAgentAction,
-        initial_agent_communication_message: Float[Array, f"{AgentIndex} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndex} ..."],
+        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.

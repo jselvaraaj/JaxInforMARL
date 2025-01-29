@@ -28,7 +28,7 @@ from config.mappo_config import (
     MAPPOConfig as MAPPOConfig,
 )
 from envs.multiagent_env import MultiAgentEnv
-from envs.schema import EntityIndex, MultiAgentGraph, MultiAgentObservation, PRNGKey
+from envs.schema import EntityIndexAxis, MultiAgentGraph, MultiAgentObservation, PRNGKey
 from envs.target_mpe_env import GraphsTupleWithAgentIndex, LinSpaceConfig
 from envs.wrapper import LogEnvState, MPELogWrapper, MPEWorldStateWrapper
 from model.actor_critic_rnn import CriticRNN, GraphAttentionActorRNN, ScannedRNN
@@ -326,7 +326,7 @@ class EnvStepRunnerState(NamedTuple):
     dones: Array
     hidden_states: ActorAndCriticHiddenStates
     communication_message: Float[Array, "..."]
-    initial_entity_position: Float[Array, f"{EntityIndex} ..."]
+    initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."]
     rng_keys: PRNGKey
 
 
