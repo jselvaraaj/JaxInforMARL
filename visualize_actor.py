@@ -13,21 +13,21 @@ from flax.training.train_state import TrainState
 from jaxtyping import Array
 
 from algorithm.marl_ppo import (
-    make_env_from_config,
-    get_actor_init_input,
-    get_init_communication_message,
-    _env_step,
-    StaticVariables,
-    get_critic_init_input,
-    ActorAndCriticTrainStates,
     ActorAndCriticHiddenStates,
+    ActorAndCriticTrainStates,
     EnvStepRunnerState,
+    StaticVariables,
     TransitionForVisualization,
+    _env_step,
+    get_actor_init_input,
+    get_critic_init_input,
+    get_init_communication_message,
+    make_env_from_config,
 )
-from config.config_format_conversion import dict_to_config, config_to_dict
+from config.config_format_conversion import config_to_dict, dict_to_config
 from config.mappo_config import MAPPOConfig
 from envs.mpe_visualizer import MPEVisualizer
-from model.actor_critic_rnn import GraphAttentionActorRNN, CriticRNN
+from model.actor_critic_rnn import CriticRNN, GraphAttentionActorRNN
 
 
 def get_restored_actor(model_artifact_name, config_dict, num_episodes):
@@ -38,7 +38,9 @@ def get_restored_actor(model_artifact_name, config_dict, num_episodes):
     t_c = config.training_config
     t_c = t_c._replace(seed=65)
     e_c = config.env_config
-    e_c = e_c._replace(env_kwargs=e_c.env_kwargs._replace(max_steps=100))
+    e_c = e_c._replace(
+        env_kwargs=e_c.env_kwargs._replace(max_steps=100)._replace(num_agents=3)
+    )
     # This is so that the derived values are updated
     config = MAPPOConfig.create(
         env_config=e_c,
@@ -237,7 +239,7 @@ def get_state_traj(
 
 if __name__ == "__main__":
 
-    artifact_version = "421"
+    artifact_version = "490"
 
     model_artifact_remote_name = (
         f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"

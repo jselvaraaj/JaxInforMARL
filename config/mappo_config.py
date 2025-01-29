@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import NamedTuple, Literal
+from typing import Literal, NamedTuple
 
 
 class CommunicationType(Enum):
@@ -34,6 +34,7 @@ class EnvKwArgs(NamedTuple):
     ]
     agent_communication_type: CommunicationType.value = None
     agent_control_noise_std: float = 0.0
+    add_self_edges_to_nodes: bool = True
 
 
 class EnvConfig(NamedTuple):
