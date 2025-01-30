@@ -3,7 +3,6 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
-from flax import struct
 from jaxtyping import Array, Bool, Float, Int
 
 from config.mappo_config import CommunicationType
@@ -43,9 +42,10 @@ from .schema import (
 from .spaces import Box, Discrete
 
 
-class MPEState(MultiAgentState, struct.PyTreeNode):
+class MPEState(NamedTuple):
     """Basic MPE State"""
-
+    dones: Bool[Array, AgentIndexAxis]
+    step: int
     entity_positions: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"]
     entity_velocities: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"]
     did_agent_die_this_time_step: Float[Array, f"{AgentIndexAxis}"]

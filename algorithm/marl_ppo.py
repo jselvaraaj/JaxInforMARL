@@ -144,6 +144,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
     node_feature_dim = 7
     communication_type = config.env_config.env_kwargs.agent_communication_type
+    agent_previous_obs_stack_size = config.env_config.env_kwargs.agent_previous_obs_stack_size
     if communication_type == CommunicationType.HIDDEN_STATE.value:
         node_feature_dim += config.network_config.gru_hidden_dim
     elif (
@@ -155,7 +156,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
         (
             num_env,
             env.num_entities,
-            node_feature_dim,
+            node_feature_dim * agent_previous_obs_stack_size,
         )
     )
     nodes = nodes.at[..., -1].set(1)  # entity type
@@ -213,7 +214,7 @@ def get_actor_init_input(config: MAPPOConfig, env):
             (
                 1,
                 num_actors,
-                env.observation_space_for_agent(env.agent_labels[0]).shape[0],
+                env.observation_space_for_agent(env.agent_labels[0]).shape[0] * agent_previous_obs_stack_size,
             )
         ),
         graph_init,
@@ -464,7 +465,7 @@ def _env_step(
             num_env, env.num_agents, *last_communication_message.shape[1:]
         )
     log_env_state = log_env_state.replace(
-        env_state=log_env_state.env_state.replace(
+        env_state=log_env_state.env_state._replace(
             agent_communication_message=agent_communication_message
         )
     )

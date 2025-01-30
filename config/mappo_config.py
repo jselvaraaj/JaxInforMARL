@@ -36,9 +36,11 @@ class EnvKwArgs(NamedTuple):
     agent_control_noise_std: float = 0.0
     add_self_edges_to_nodes: bool = True
 
+    agent_previous_obs_stack_size: int = 3
+
 
 class EnvConfig(NamedTuple):
-    env_cls_name: str = "TargetMPEEnvironment"
+    env_cls_name: str = "StackedTargetMPEEnvironment"
     env_kwargs: EnvKwArgs = EnvKwArgs()
 
 

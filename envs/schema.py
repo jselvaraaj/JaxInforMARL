@@ -1,7 +1,6 @@
 from typing import NamedTuple, TypeAlias
 
 from beartype import beartype as typechecker
-from flax import struct
 from jaxtyping import Array, Bool, jaxtyped
 
 
@@ -35,7 +34,7 @@ CoordinateAxisIndexAxis = "position_index"
 
 
 @jaxtyped(typechecker=typechecker)
-class MultiAgentState(struct.PyTreeNode):
+class MultiAgentState(NamedTuple):
     dones: Bool[Array, AgentIndexAxis]
     step: int
 
