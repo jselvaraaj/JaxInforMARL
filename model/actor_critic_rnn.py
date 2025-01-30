@@ -55,8 +55,8 @@ class ActorRNN(nn.Module):
         )(obs)
         embedding = nn.relu(embedding)
 
-        rnn_in = (embedding, dones)
-        hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        # rnn_in = (embedding, dones)
+        # hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
         for _ in range(self.config.network_config.actor_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
@@ -277,8 +277,8 @@ class CriticRNN(nn.Module):
         )(world_state)
         embedding = nn.relu(embedding)
 
-        rnn_in = (embedding, dones)
-        hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        # rnn_in = (embedding, dones)
+        # hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
         for _ in range(self.config.network_config.critic_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
