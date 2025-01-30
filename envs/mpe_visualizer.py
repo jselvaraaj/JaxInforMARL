@@ -69,7 +69,7 @@ class MPEVisualizer(object):
         from matplotlib.patches import Circle
 
         env_index = 0
-        state = self.state_seq.replace(
+        state = self.state_seq._replace(
             entity_positions=self.state_seq.entity_positions[0][env_index],
             step=self.state_seq.step[0][env_index],
             agent_visibility_radius=self.state_seq.agent_visibility_radius[0][
@@ -194,7 +194,7 @@ class MPEVisualizer(object):
 
     def update(self, frame):
         env_index = 0
-        state = self.state_seq.replace(
+        state = self.state_seq._replace(
             entity_positions=self.state_seq.entity_positions[frame][env_index],
             step=self.state_seq.step[frame][env_index],
         )
