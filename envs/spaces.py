@@ -87,11 +87,11 @@ class Box(Space):
     """
 
     def __init__(
-        self,
-        low: float,
-        high: float,
-        shape: Tuple[int],
-        dtype: jnp.dtype = jnp.float32,
+            self,
+            low: float,
+            high: float,
+            shape: Tuple[int],
+            dtype: jnp.dtype = jnp.float32,
     ):
         self.low = low
         self.high = high

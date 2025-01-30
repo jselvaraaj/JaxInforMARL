@@ -102,7 +102,6 @@ class TargetMPEEnvTest(unittest.TestCase):
         Test that the target mpe do nothing discrete action works.
         """
         with jax.disable_jit(True):
-
             env, graph, state, max_steps, key = TargetMPEEnvTest.set_up()
             state = TargetMPEEnvTest.get_init_state(key, env)
 

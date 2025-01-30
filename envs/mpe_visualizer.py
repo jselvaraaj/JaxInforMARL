@@ -9,7 +9,6 @@ from calculate_metric import get_stats_for_state
 # Before creating your figure:
 sns.set_theme(style="dark", context="talk")  # or "darkgrid", "ticks", etc.
 
-
 from config.mappo_config import MAPPOConfig
 from .target_mpe_env import TargetMPEEnvironment, MPEState
 
@@ -18,11 +17,11 @@ ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 class MPEVisualizer(object):
     def __init__(
-        self,
-        env: TargetMPEEnvironment,
-        state_seq: MPEState,
-        config: MAPPOConfig,
-        reward_seq=None,
+            self,
+            env: TargetMPEEnvironment,
+            state_seq: MPEState,
+            config: MAPPOConfig,
+            reward_seq=None,
     ):
         self.ax = None
         self.fig = None
@@ -46,9 +45,9 @@ class MPEVisualizer(object):
         self.init_render()
 
     def animate(
-        self,
-        save_filename: Optional[str] = None,
-        view: bool = True,
+            self,
+            save_filename: Optional[str] = None,
+            view: bool = True,
     ):
         """Anim for 2D fct - x (#steps, #pop, 2) & fitness (#steps, #pop)"""
         ani = animation.FuncAnimation(

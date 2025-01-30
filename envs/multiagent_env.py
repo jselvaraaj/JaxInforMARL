@@ -27,28 +27,28 @@ def default(val, d):
 
 
 def entity_labels_to_indices(
-    ids: list[EntityLabel], start: int
+        ids: list[EntityLabel], start: int
 ) -> dict[EntityLabel, int]:
     return {_id: start + i for i, _id in enumerate(ids)}
 
 
 def is_dictionary_of_spaces_for_entities(
-    spaces: dict[EntityLabel, Space], num_entities: int
+        spaces: dict[EntityLabel, Space], num_entities: int
 ):
     return (
-        all(isinstance(value, Space) for value in spaces.values())
-        and len(spaces) == num_entities
+            all(isinstance(value, Space) for value in spaces.values())
+            and len(spaces) == num_entities
     )
 
 
 class MultiAgentEnv(ABC):
     def __init__(
-        self,
-        num_agents: int,
-        max_steps: int,
-        action_spaces: dict[AgentLabel, Space],
-        observation_spaces: dict[AgentLabel, Space],
-        agent_labels=None,
+            self,
+            num_agents: int,
+            max_steps: int,
+            action_spaces: dict[AgentLabel, Space],
+            observation_spaces: dict[AgentLabel, Space],
+            agent_labels=None,
     ):
         """
         num_agents (int): maximum number of agents within the environment
@@ -68,7 +68,7 @@ class MultiAgentEnv(ABC):
         self.max_steps = max_steps
 
         assert agent_labels is None or (
-            len(agent_labels) == num_agents
+                len(agent_labels) == num_agents
         ), "agent_ids must be None or have length num_agents"
         self.agent_labels = default(
             agent_labels, [f"agent_{i}" for i in range(num_agents)]
@@ -79,30 +79,30 @@ class MultiAgentEnv(ABC):
 
     @abstractmethod
     def reset(
-        self,
-        key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         """Performs resetting of the environment."""
 
     @abstractmethod
     def _step(
-        self,
-        key: PRNGKey,
-        state: MultiAgentState,
-        actions: MultiAgentAction,
+            self,
+            key: PRNGKey,
+            state: MultiAgentState,
+            actions: MultiAgentAction,
     ):
         """Environment-specific step transition."""
 
     @partial(jax.jit, static_argnums=(0,))
     def step(
-        self,
-        key: PRNGKey,
-        state: MultiAgentState,
-        actions: MultiAgentAction,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            state: MultiAgentState,
+            actions: MultiAgentAction,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         """Performs step transitions in the environment. Do not override this method.
         Override _step instead.

@@ -123,14 +123,13 @@ class MAPPOConfig(NamedTuple):
 
     @classmethod
     def create(
-        cls,
-        env_config=EnvConfig(),
-        training_config=TrainingConfig(),
-        network_config=NetworkConfig(),
-        wandb_config=WandbConfig(),
-        testing=False,
+            cls,
+            env_config=EnvConfig(),
+            training_config=TrainingConfig(),
+            network_config=NetworkConfig(),
+            wandb_config=WandbConfig(),
+            testing=False,
     ) -> MAPPOConfig:
-
         num_actors = env_config.env_kwargs.num_agents * training_config.num_envs
         batch_size = num_actors * training_config.ppo_config.num_steps_per_update
         _derived_values = DerivedValues(
@@ -141,7 +140,7 @@ class MAPPOConfig(NamedTuple):
                 // training_config.ppo_config.num_steps_per_update
             ),
             minibatch_size=(
-                batch_size // training_config.ppo_config.num_minibatches_actors
+                    batch_size // training_config.ppo_config.num_minibatches_actors
             ),
             scaled_clip_eps=(
                 training_config.ppo_config.clip_eps / env_config.env_kwargs.num_agents
@@ -151,7 +150,7 @@ class MAPPOConfig(NamedTuple):
         )
         if not testing:
             assert (
-                _derived_values.num_updates > 0
+                    _derived_values.num_updates > 0
             ), "Number of updates per environment must be greater than 0."
 
         return cls(

@@ -231,7 +231,6 @@ class GraphAttentionActorRNN(nn.Module):
 
     @nn.compact
     def __call__(self, hidden, x):
-
         obs, graph, dones = x
 
         agent_indices = graph.agent_indices

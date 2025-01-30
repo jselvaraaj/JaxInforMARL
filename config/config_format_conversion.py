@@ -13,7 +13,7 @@ def config_to_dict(config):
         )
         for attr in dir(config)
         if not callable(getattr(config, attr))
-        and not (attr.startswith("__") or attr.startswith("_"))
+           and not (attr.startswith("__") or attr.startswith("_"))
     }
 
 

@@ -40,20 +40,20 @@ class MARLWrapper(MultiAgentEnv):
         return self._env.get_observation(state)
 
     def reset(
-        self,
-        key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MultiAgentState]:
         return self._env.reset(
             key, initial_agent_communication_message, initial_entity_position
         )
 
     def _step(
-        self,
-        key: PRNGKey,
-        state: MultiAgentState,
-        actions: MultiAgentAction,
+            self,
+            key: PRNGKey,
+            state: MultiAgentState,
+            actions: MultiAgentAction,
     ):
         return self._env._step(key, state, actions)
 
@@ -82,10 +82,10 @@ class MPEWorldStateWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=0)
     def reset(
-        self,
-        key,
-        agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key,
+            agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         obs, graph, env_state = self._env.reset(
             key, agent_communication_message, initial_entity_position
@@ -95,12 +95,12 @@ class MPEWorldStateWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=0)
     def step(
-        self,
-        key,
-        state,
-        action,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key,
+            state,
+            action,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ):
         obs, graph, env_state, reward, done, info = self._env.step(
             key,
@@ -149,10 +149,10 @@ class LogWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(
-        self,
-        key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, LogEnvState]:
         obs, graph, env_state = self._env.reset(
             key, initial_agent_communication_message, initial_entity_position
@@ -168,12 +168,12 @@ class LogWrapper(MARLWrapper):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(
-        self,
-        key: PRNGKey,
-        state: LogEnvState,
-        action: MultiAgentAction,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            state: LogEnvState,
+            action: MultiAgentAction,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -197,9 +197,9 @@ class LogWrapper(MARLWrapper):
             episode_returns=new_episode_return * (1 - ep_done),
             episode_lengths=new_episode_length * (1 - ep_done),
             returned_episode_returns=state.returned_episode_returns * (1 - ep_done)
-            + new_episode_return * ep_done,
+                                     + new_episode_return * ep_done,
             returned_episode_lengths=state.returned_episode_lengths * (1 - ep_done)
-            + new_episode_length * ep_done,
+                                     + new_episode_length * ep_done,
         )
         if self.replace_info:
             info = {}
@@ -215,12 +215,12 @@ class MPELogWrapper(LogWrapper):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(
-        self,
-        key: PRNGKey,
-        state: LogEnvState,
-        action: MultiAgentAction,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            state: LogEnvState,
+            action: MultiAgentAction,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -247,9 +247,9 @@ class MPELogWrapper(LogWrapper):
             episode_returns=new_episode_return * (1 - ep_done),
             episode_lengths=new_episode_length * (1 - ep_done),
             returned_episode_returns=state.returned_episode_returns * (1 - ep_done)
-            + new_episode_return * ep_done,
+                                     + new_episode_return * ep_done,
             returned_episode_lengths=state.returned_episode_lengths * (1 - ep_done)
-            + new_episode_length * ep_done,
+                                     + new_episode_length * ep_done,
         )
         if self.replace_info:
             info = {}

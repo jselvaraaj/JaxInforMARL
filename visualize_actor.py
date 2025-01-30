@@ -117,11 +117,11 @@ def get_restored_actor(model_artifact_name, config_dict, num_episodes):
 
 
 def get_state_traj(
-    model_artifact_remote_name,
-    artifact_version,
-    initial_entity_position=None,
-    store_action_field=False,
-    num_episodes=2,
+        model_artifact_remote_name,
+        artifact_version,
+        initial_entity_position=None,
+        store_action_field=False,
+        num_episodes=2,
 ) -> (TransitionForVisualization, MAPPOConfig):
     api = wandb.Api()
     model_artifact = api.artifact(model_artifact_remote_name, type="model")
@@ -238,7 +238,6 @@ def get_state_traj(
 
 
 if __name__ == "__main__":
-
     artifact_version = "490"
 
     model_artifact_remote_name = (

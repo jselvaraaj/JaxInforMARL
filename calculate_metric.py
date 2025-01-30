@@ -10,7 +10,6 @@ from envs.target_mpe_env import MPEState
 
 @partial(jax.jit, static_argnums=(0,))
 def get_stats_for_state(env: TargetMPEEnvironment, state: MPEState):
-
     @partial(jax.vmap, in_axes=(0, None, None))
     def _collisions(agent_idx: Int[Array, "..."], other_idx: Int[Array, "..."], state):
         return jax.vmap(env.is_collision, in_axes=(None, 0, None))(
@@ -23,11 +22,11 @@ def get_stats_for_state(env: TargetMPEEnvironment, state: MPEState):
         env.agent_indices, env.landmark_indices, state
     )
     num_collisions = (
-        jnp.sum(
-            _collisions(env.agent_indices, env.agent_indices, state)
-            & ~is_agent_dead[..., None]
-        )
-        / 2
+            jnp.sum(
+                _collisions(env.agent_indices, env.agent_indices, state)
+                & ~is_agent_dead[..., None]
+            )
+            / 2
     )
 
     num_agent_died = jnp.sum(

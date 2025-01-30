@@ -7,7 +7,6 @@ from flax import struct
 from jaxtyping import Array, Bool, Float, Int
 
 from config.mappo_config import CommunicationType
-
 from .default_env_config import (
     AGENT_COLOR,
     CONTACT_FORCE,
@@ -68,27 +67,27 @@ class TargetMPEEnvironment(MultiAgentEnv):
     """
 
     def __init__(
-        self,
-        num_agents=3,
-        action_type=DISCRETE_ACT,
-        agent_labels: None | list[AgentLabel] = None,
-        action_spaces: dict[AgentLabel, Discrete | Box] = None,
-        observation_spaces: dict[AgentLabel, Discrete | Box] = None,
-        color: RGB = None,
-        # communication_message_dim: int = 0,
-        position_dim: int = 2,
-        max_steps: int = MAX_STEPS,
-        dt: float = DT,
-        collision_reward_coefficient=-5,
-        agent_visibility_radius=None,
-        agent_max_speed: int = 1,
-        entity_acceleration=1,
-        entities_initial_coord_radius=None,
-        one_time_death_reward=2,
-        agent_communication_type=None,
-        agent_control_noise_std=0,
-        add_self_edges_to_nodes=False,
-        distance_to_goal_reward_coefficient=5,
+            self,
+            num_agents=3,
+            action_type=DISCRETE_ACT,
+            agent_labels: None | list[AgentLabel] = None,
+            action_spaces: dict[AgentLabel, Discrete | Box] = None,
+            observation_spaces: dict[AgentLabel, Discrete | Box] = None,
+            color: RGB = None,
+            # communication_message_dim: int = 0,
+            position_dim: int = 2,
+            max_steps: int = MAX_STEPS,
+            dt: float = DT,
+            collision_reward_coefficient=-5,
+            agent_visibility_radius=None,
+            agent_max_speed: int = 1,
+            entity_acceleration=1,
+            entities_initial_coord_radius=None,
+            one_time_death_reward=2,
+            agent_communication_type=None,
+            agent_control_noise_std=0,
+            add_self_edges_to_nodes=False,
+            distance_to_goal_reward_coefficient=5,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -148,7 +147,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.entities_initial_coord_radius = jnp.asarray(entities_initial_coord_radius)
 
         assert (
-            color is None or len(color) == num_agents + self.num_landmarks
+                color is None or len(color) == num_agents + self.num_landmarks
         ), "color must have length num_agents + num_landmarks. Note num_landmark = num_agents"
         self.color = default(
             color, [AGENT_COLOR] * self.num_agents + [OBS_COLOR] * self.num_landmarks
@@ -157,7 +156,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         self.agent_visibility_radius = jnp.asarray(agent_visibility_radius)
 
         assert (
-            collision_reward_coefficient <= 0.0
+                collision_reward_coefficient <= 0.0
         ), "collision_reward must be less than 0"
         self.collision_reward_coefficient = collision_reward_coefficient
 
@@ -205,9 +204,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
     # noinspection DuplicatedCode
     @partial(jax.vmap, in_axes=[None, 0, 0])
     def _discrete_action_to_control_input(
-        self,
-        agent_index: Int[Array, f"{AgentIndexAxis}"],
-        action: Int[Array, f"{AgentIndexAxis}"],
+            self,
+            agent_index: Int[Array, f"{AgentIndexAxis}"],
+            action: Int[Array, f"{AgentIndexAxis}"],
     ) -> Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"]:
         u = jnp.zeros((self.position_dim,))
         x_axis = 0
@@ -226,7 +225,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         pass
 
     def _discrete_action_by_label_to_control_input(
-        self, actions: MultiAgentAction
+            self, actions: MultiAgentAction
     ) -> Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"]:
         actions = jnp.array(
             [actions[agent_label] for agent_label in self.agent_labels]
@@ -236,10 +235,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
     @partial(jax.jit, static_argnums=[0])
     def reset(
-        self,
-        key: PRNGKey,
-        initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
-        initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
+            self,
+            key: PRNGKey,
+            initial_agent_communication_message: Float[Array, f"{AgentIndexAxis} ..."],
+            initial_entity_position: Float[Array, f"{EntityIndexAxis} ..."],
     ) -> tuple[MultiAgentObservation, MultiAgentGraph, MPEState]:
         """Initialise with random positions"""
 
@@ -272,7 +271,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 distances = jnp.where(mask, distances, jnp.inf)
 
                 is_valid = jnp.all(distances >= min_dist_between_points) | (
-                    num_accepted == 0
+                        num_accepted == 0
                 )
 
                 points = jax.lax.dynamic_update_slice(
@@ -325,7 +324,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         @partial(jax.vmap, in_axes=[0, None])
         def _observation(
-            agent_idx: Int[Array, AgentIndexAxis], state: MPEState
+                agent_idx: Int[Array, AgentIndexAxis], state: MPEState
         ) -> Float[Array, f"{AgentIndexAxis} 3*{CoordinateAxisIndexAxis}"]:
             """Return observation for agent i."""
             landmark_idx = self.num_agents + agent_idx
@@ -359,8 +358,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 [state.agent_communication_message, landmark_communication_message]
             )
         elif (
-            self.agent_communication_type == CommunicationType.PAST_ACTION.value
-            or self.agent_communication_type == CommunicationType.CURRENT_ACTION.value
+                self.agent_communication_type == CommunicationType.PAST_ACTION.value
+                or self.agent_communication_type == CommunicationType.CURRENT_ACTION.value
         ):
             landmark_communication_message = jnp.zeros_like(
                 state.agent_communication_message
@@ -372,21 +371,21 @@ class TargetMPEEnvironment(MultiAgentEnv):
         @partial(jax.vmap, in_axes=(None, 0))
         @partial(jax.vmap, in_axes=(0, None))
         def get_node_feature(
-            entity_idx: Int[Array, EntityIndexAxis],
-            agent_id: Int[Array, AgentIndexAxis],
+                entity_idx: Int[Array, EntityIndexAxis],
+                agent_id: Int[Array, AgentIndexAxis],
         ) -> Int[Array, f"{AgentIndexAxis} {EntityIndexAxis}  7"]:
             goal_idx = jnp.where(
                 entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
             )
 
             goal_relative_coord = (
-                state.entity_positions[goal_idx] - state.entity_positions[agent_id]
+                    state.entity_positions[goal_idx] - state.entity_positions[agent_id]
             )
             relative_position = (
-                state.entity_positions[entity_idx] - state.entity_positions[agent_id]
+                    state.entity_positions[entity_idx] - state.entity_positions[agent_id]
             )
             relative_velocity = (
-                state.entity_velocities[entity_idx] - state.entity_velocities[agent_id]
+                    state.entity_velocities[entity_idx] - state.entity_velocities[agent_id]
             )
             entity_type = jnp.where(
                 entity_idx < self.num_agents,
@@ -469,32 +468,32 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
     @partial(jax.vmap, in_axes=[None, 0, 0, 0, 0])
     def _control_to_agents_forces(
-        self,
-        key: PRNGKey,
-        u: Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"],
-        u_noise: Int[Array, AgentIndexAxis],
-        moveable: Bool[Array, AgentIndexAxis],
+            self,
+            key: PRNGKey,
+            u: Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"],
+            u_noise: Int[Array, AgentIndexAxis],
+            moveable: Bool[Array, AgentIndexAxis],
     ):
         noise = jax.random.normal(key, shape=u.shape) * u_noise
         zero_force = jnp.zeros_like(u)
         return jax.lax.select(moveable, u + noise, zero_force)
 
     def _add_environment_force(
-        self,
-        all_forces: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
-        state: MPEState,
+            self,
+            all_forces: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
+            state: MPEState,
     ) -> Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"]:
         """gather physical forces acting on entities"""
 
         @partial(jax.vmap, in_axes=[0])
         def _force_on_entities_from_all_other_entities(
-            entity_i: Int[Array, EntityIndexAxis]
+                entity_i: Int[Array, EntityIndexAxis]
         ) -> Float[
             Array, f"{EntityIndexAxis} {EntityIndexAxis} {CoordinateAxisIndexAxis}"
         ]:
             @partial(jax.vmap, in_axes=[None, 0])
             def _force_between_pair_of_entities(
-                entity_a: int, entity_b: Int[Array, EntityIndexAxis]
+                    entity_a: int, entity_b: Int[Array, EntityIndexAxis]
             ) -> Float[
                 Array, f"{EntityIndexAxis} {EntityIndexAxis} {CoordinateAxisIndexAxis}"
             ]:
@@ -529,11 +528,11 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
     # get collision forces for any contact between two entities
     def _get_collision_force(
-        self, entity_a: int, entity_b: int, state: MPEState
+            self, entity_a: int, entity_b: int, state: MPEState
     ) -> Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"]:
         distance_min = self.entity_radius[entity_a] + self.entity_radius[entity_b]
         delta_position = (
-            state.entity_positions[entity_a] - state.entity_positions[entity_b]
+                state.entity_positions[entity_a] - state.entity_positions[entity_b]
         )
 
         distance = jnp.sqrt(jnp.sum(jnp.square(delta_position)))
@@ -547,22 +546,22 @@ class TargetMPEEnvironment(MultiAgentEnv):
         force = jnp.array([force_a, force_b])
 
         no_collision_condition = (
-            (~self.can_entity_collide[entity_a])
-            | (~self.can_entity_collide[entity_b])
-            | (entity_a == entity_b)
+                (~self.can_entity_collide[entity_a])
+                | (~self.can_entity_collide[entity_b])
+                | (entity_a == entity_b)
         )
         zero_collision_force = jnp.zeros((2, 2))
         return jax.lax.select(no_collision_condition, zero_collision_force, force)
 
     @partial(jax.vmap, in_axes=[None, 0, 0, 0, 0, 0, 0])
     def _integrate_state(
-        self,
-        all_forces: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
-        entity_positions: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
-        entity_velocities: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
-        mass: Float[Array, EntityIndexAxis],
-        moveable: Bool[Array, EntityIndexAxis],
-        max_speed: Float[Array, EntityIndexAxis],
+            self,
+            all_forces: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
+            entity_positions: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
+            entity_velocities: Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
+            mass: Float[Array, EntityIndexAxis],
+            moveable: Bool[Array, EntityIndexAxis],
+            max_speed: Float[Array, EntityIndexAxis],
     ):
         """integrate physical state"""
 
@@ -583,11 +582,11 @@ class TargetMPEEnvironment(MultiAgentEnv):
         return entity_positions, entity_velocities
 
     def _double_integrator_dynamics(
-        self,
-        key: PRNGKey,
-        state: MPEState,
-        u: Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"],
-        death_mask: Bool[Array, f"{AgentIndexAxis}"],
+            self,
+            key: PRNGKey,
+            state: MPEState,
+            u: Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"],
+            death_mask: Bool[Array, f"{AgentIndexAxis}"],
     ) -> tuple[
         Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
         Float[Array, f"{EntityIndexAxis} {CoordinateAxisIndexAxis}"],
@@ -611,7 +610,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
         all_forces = self._add_environment_force(all_forces, state)
 
         can_entity_move = jnp.concatenate(
-            [can_agent_move, self.is_moveable[self.num_agents :]]
+            [can_agent_move, self.is_moveable[self.num_agents:]]
         )
 
         # integrate physical state
@@ -627,10 +626,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
         return entity_positions, entity_velocities
 
     def _step(
-        self,
-        key: PRNGKey,
-        state: MPEState,
-        actions: MultiAgentAction,
+            self,
+            key: PRNGKey,
+            state: MPEState,
+            actions: MultiAgentAction,
     ) -> tuple[
         MultiAgentObservation,
         MultiAgentGraph,
@@ -654,18 +653,18 @@ class TargetMPEEnvironment(MultiAgentEnv):
         dones = jnp.asarray(state.step >= self.max_steps) | is_agent_dead
 
         did_agent_die_this_time_step = (
-            state.did_agent_die_this_time_step ^ is_agent_dead
+                state.did_agent_die_this_time_step ^ is_agent_dead
         )
 
         agent_positions = jnp.where(
             did_agent_die_this_time_step[..., None],
-            entity_positions[self.num_agents :],
+            entity_positions[self.num_agents:],
             entity_positions[: self.num_agents],
         )
 
         agent_velocities = jnp.where(
             did_agent_die_this_time_step[..., None],
-            entity_velocities[self.num_agents :],
+            entity_velocities[self.num_agents:],
             entity_velocities[: self.num_agents],
         )
 
@@ -699,7 +698,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         @partial(jax.vmap, in_axes=[0, None])
         def _dist_between_target_reward(
-            agent_index: Int[Array, AgentIndexAxis], state: MPEState
+                agent_index: Int[Array, AgentIndexAxis], state: MPEState
         ) -> Float[Array, AgentIndexAxis]:
             # reward is the negative distance from agent to landmark
             corresponding_landmark_index = self.num_agents + agent_index
@@ -734,8 +733,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
         global_agent_collision_rew = jnp.sum(agent_agent_collision)
 
         global_reward = (
-            global_dist_rew
-            + self.collision_reward_coefficient * global_agent_collision_rew
+                global_dist_rew
+                + self.collision_reward_coefficient * global_agent_collision_rew
         )
         one_time_reaching_goal_reward = jnp.sum(
             jax.lax.select(
@@ -759,9 +758,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
     def is_collision(self, a: EntityIndex, b: EntityIndex, state: MPEState):
         """check if two entities are colliding"""
         return (
-            self.is_there_overlap(a, b, state)
-            & (self.can_entity_collide[a] & self.can_entity_collide[b])
-            & (a != b)
+                self.is_there_overlap(a, b, state)
+                & (self.can_entity_collide[a] & self.can_entity_collide[b])
+                & (a != b)
         )
 
     @partial(jax.vmap, in_axes=(None, None, 0), out_axes=1)
@@ -800,8 +799,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
     # noinspection DuplicatedCode
     @partial(jax.vmap, in_axes=[None, 0])
     def discrete_action_to_viz_vector(
-        self,
-        action: Int[Array, "..."],
+            self,
+            action: Int[Array, "..."],
     ) -> Float[Array, f"{AgentIndexAxis} {CoordinateAxisIndexAxis}"]:
         u = jnp.zeros((self.position_dim,))
         x_axis = 0

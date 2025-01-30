@@ -34,13 +34,11 @@ traj_batch = jax.tree.map(
     traj_batch,
 )
 
-
 jax.tree.map(lambda x: x.shape, traj_batch)
 
 # summing across all steps in episode and across all agents
 total_reward = jnp.sum(traj_batch.reward, axis=(1, 2))
 avg_reward_per_episode = jnp.average(total_reward).item()
-
 
 done = jnp.swapaxes(
     traj_batch.done, 1, 2
@@ -75,12 +73,10 @@ env_state = jax.tree.map(
     lambda x: x[:, :, 0], env_state
 )  # take state from one agent since it will be the same for all agents
 
-
 num_collisions, num_agent_died = compute_stats_for_all_episode(env, env_state)
 
 avg_num_collision_across_all_episodes = jnp.average(num_collisions).item()
 avg_num_deaths_across_all_episodes = jnp.average(num_agent_died).item()
-
 
 print(
     avg_reward_per_episode,
