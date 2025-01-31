@@ -221,7 +221,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             key_edge_features = key_projection(edge_features)
 
-            key_received_attributes = key_received_attributes + key_edge_features[:]
+            key_received_attributes = key_received_attributes + key_edge_features[:, None]
 
             softmax_logits: Float[Array, Literal["edge_id"]] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=-1
@@ -285,7 +285,7 @@ class GraphStackedMultiHeadAttention(nn.Module):
             entity_type
         )
         # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
-        nodes = jnp.concatenate([nodes[:, ..., :-1], entity_emb[:]], axis=-1)
+        nodes = jnp.concatenate([nodes[:, None, ..., :-1], entity_emb[:, None]], axis=-1)
 
         graph = jraph.GraphsTuple(
             nodes=nodes,
@@ -306,7 +306,7 @@ class GraphStackedMultiHeadAttention(nn.Module):
 
         nodes, edges, receivers, senders, _, n_node, n_edge = graph
 
-        # nodes = PathNet()(nodes)
+        nodes = PathNet()(nodes)
 
         # note the other elements in the graph are still in jraph compatible format
         # but not reverting it back since won't be using it anymore
