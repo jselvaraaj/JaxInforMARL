@@ -1,14 +1,12 @@
 import functools
 from typing import Literal
 
-import diffrax
 import distrax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jraph
 from flax.linen.initializers import constant, orthogonal
-from flax.struct import PyTreeNode
 from jaxtyping import Array, Float
 from jraph._src import utils
 
@@ -59,56 +57,53 @@ class EmbeddingDerivativeNet(nn.Module):
         return y
 
 
-class NeuralODE(PyTreeNode):
-    derivative_net: nn.Module
+# class NeuralODE(PyTreeNode):
+#     derivative_net: nn.Module
+#
+#     def init(self, rng, coords):
+#         rng, derivative_net_rng = jax.random.split(rng)
+#         coords, derivative_net_params = self.derivative_net.init_with_output(derivative_net_rng, coords)
+#
+#         return {
+#             "derivative_net": derivative_net_params,
+#         }
+#
+#     def apply(self, params, y0):
+#         def f(t, y, args):
+#             return self.derivative_net.apply(params["derivative_net"], y)
+#
+#         term = diffrax.ODETerm(f)
+#         solver = diffrax.Tsit5()
+#         solution = diffrax.diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0,
+#                                        saveat=diffrax.SaveAt(t1=True, ts=jnp.asarray([0.2, 0.4, 0.6, 0.8])))
+#         yn = solution.ys
+#         return yn
 
-    def init(self, rng, coords):
-        rng, derivative_net_rng = jax.random.split(rng)
-        coords, derivative_net_params = self.derivative_net.init_with_output(derivative_net_rng, coords)
 
-        return {
-            "derivative_net": derivative_net_params,
-        }
+class DiscreteNeuralODEScannedRNNCell(nn.Module):
+    config: MAPPOConfig
 
-    def apply(self, params, y0):
-        def f(t, y, args):
-            return self.derivative_net.apply(params["derivative_net"], y)
-
-        term = diffrax.ODETerm(f)
-        solver = diffrax.Tsit5()
-        solution = diffrax.diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0,
-                                       saveat=diffrax.SaveAt(t1=True, ts=jnp.asarray([0.2, 0.4, 0.6, 0.8])))
-        yn = solution.ys
-        return yn
-
-
-class DiscreteNeuralODERNNCell(nn.Module):
-    dt: float
-    derivative_net: nn.Module
-
+    @functools.partial(
+        nn.scan,
+        variable_broadcast="params",
+        in_axes=0,
+        out_axes=0,
+        split_rngs={"params": False},
+        length=MAPPOConfig.create().network_config.discrete_node_steps
+    )
     @nn.compact
-    def __call__(self, state):
-        dy = self.derivative_net(state)
-        new_state = state + self.dt * dy
-        return new_state
+    def __call__(self, state, unused):
+        dy = EmbeddingDerivativeNet(self.config)(state)
+        new_state = state + self.config.network_config.discrete_node_dt * dy
+        return new_state, new_state
 
 
 class DiscreteNeuralODE(nn.Module):
-    derivative_net: nn.Module
     config: MAPPOConfig
 
     @nn.compact
     def __call__(self, y0):
-        dt = self.config.network_config.discrete_node_dt
-        steps = self.config.network_config.discrete_node_steps
-
-        rnn_cell = DiscreteNeuralODERNNCell(dt=dt, derivative_net=self.derivative_net)
-
-        def step_fn(state, _):
-            new_state = rnn_cell(state)
-            return new_state, new_state  # carry and output are both the new state
-
-        final_state, states = jax.lax.scan(step_fn, y0, None, length=steps)
+        final_state, states = DiscreteNeuralODEScannedRNNCell(self.config)(y0, None)
         return states
 
 
@@ -167,10 +162,6 @@ class ActorRNN(nn.Module):
 # This is built off of the GAT implementation in jraph
 class GraphMultiHeadAttentionLayer(nn.Module):
     config: MAPPOConfig
-
-    neural_ode: NeuralODE = NeuralODE(
-        derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
-    )
 
     @functools.partial(nn.jit, static_argnames=("avg_multi_head",))
     @nn.compact
@@ -255,9 +246,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         )(nodes_seg_sum)
         nodes_seg_sum = nn.relu(nodes_seg_sum).squeeze(axis=-1)
 
-        ode_params = self.param('neural_ode',
-                                lambda rng: self.neural_ode.init(rng, jnp.zeros_like(nodes_seg_sum)))
-        nodes = self.neural_ode.apply(ode_params, nodes_seg_sum)
+        nodes = DiscreteNeuralODE(self.config)(nodes_seg_sum)
 
         nodes = nodes.swapaxes(0, 1)
 
