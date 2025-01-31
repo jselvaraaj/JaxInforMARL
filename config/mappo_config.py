@@ -100,6 +100,9 @@ class NetworkConfig(NamedTuple):
     graph_num_linear_layer: int = 2
     graph_hidden_feature_dim: int = 8
 
+    node_hidden_dim: int = 8
+    node_num_layers: int = 2
+
 
 class WandbConfig(NamedTuple):
     entity: str = "josssdan"

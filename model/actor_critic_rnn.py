@@ -47,9 +47,10 @@ class EmbeddingDerivativeNet(nn.Module):
 
     @nn.compact
     def __call__(self, y):
-        for _ in range(self.config.network_config.actor_num_hidden_linear_layer - 1):
+        output_dim = y.shape[-1]
+        for _ in range(self.config.network_config.node_num_layers):
             y = nn.Dense(
-                self.config.network_config.gru_hidden_dim,
+                output_dim,
                 kernel_init=orthogonal(2),
                 bias_init=constant(0.0),
             )(y)
@@ -75,8 +76,9 @@ class NeuralODE(PyTreeNode):
 
         term = diffrax.ODETerm(f)
         solver = diffrax.Tsit5()
-        solution = diffrax.diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0)
-        yn = solution.ys[-1]
+        solution = diffrax.diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0,
+                                       saveat=diffrax.SaveAt(t1=True, ts=jnp.asarray([0.2, 0.4, 0.6, 0.8])))
+        yn = solution.ys
         return yn
 
 
@@ -85,9 +87,9 @@ class ActorRNN(nn.Module):
     action_dim: list[int]
     config: MAPPOConfig
 
-    neural_ode: NeuralODE = NeuralODE(
-        derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
-    )
+    # neural_ode: NeuralODE = NeuralODE(
+    #     derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
+    # )
 
     @nn.compact
     def __call__(self, hidden, x):
@@ -102,9 +104,9 @@ class ActorRNN(nn.Module):
         # rnn_in = (embedding, dones)
         # hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
-        ode_params = self.param('neural_ode',
-                                lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
-        embedding = self.neural_ode.apply(ode_params, embedding)
+        # ode_params = self.param('neural_ode',
+        #                         lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
+        # embedding = self.neural_ode.apply(ode_params, embedding)[-1]
 
         for _ in range(self.config.network_config.actor_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
@@ -135,6 +137,10 @@ class ActorRNN(nn.Module):
 # This is built off of the GAT implementation in jraph
 class GraphMultiHeadAttentionLayer(nn.Module):
     config: MAPPOConfig
+
+    neural_ode: NeuralODE = NeuralODE(
+        derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
+    )
 
     @functools.partial(nn.jit, static_argnames=("avg_multi_head",))
     @nn.compact
@@ -210,7 +216,13 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         else:
             nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=1)
 
-        nodes = linear_layer(nodes_seg_sum)
+        ode_params = self.param('neural_ode',
+                                lambda rng: self.neural_ode.init(rng, jnp.zeros_like(nodes_seg_sum)))
+        nodes = self.neural_ode.apply(ode_params, nodes_seg_sum)
+
+        nodes = nodes.swapaxes(0, 1)
+        nodes = nodes.reshape(nodes.shape[:1] + (-1,))
+
         return graph._replace(nodes=nodes)
 
 
@@ -301,9 +313,10 @@ class GraphAttentionActorRNN(nn.Module):
 # noinspection DuplicatedCode
 class CriticRNN(nn.Module):
     config: MAPPOConfig
-    neural_ode: NeuralODE = NeuralODE(
-        derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
-    )
+
+    # neural_ode: NeuralODE = NeuralODE(
+    #     derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
+    # )
 
     @nn.compact
     def __call__(self, hidden, x):
@@ -330,9 +343,9 @@ class CriticRNN(nn.Module):
 
         # rnn_in = (embedding, dones)
         # hidden, embedding = ScannedRNN()(hidden, rnn_in)
-        ode_params = self.param('neural_ode',
-                                lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
-        embedding = self.neural_ode.apply(ode_params, embedding)
+        # ode_params = self.param('neural_ode',
+        #                         lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
+        # embedding = self.neural_ode.apply(ode_params, embedding)[-1]
 
         for _ in range(self.config.network_config.critic_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
