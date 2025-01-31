@@ -191,10 +191,10 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             key_edge_features = key_projection(edge_features)
 
-            key_received_attributes = key_received_attributes + key_edge_features
+            key_received_attributes = key_received_attributes + key_edge_features[:, None]
 
             softmax_logits: Float[Array, Literal["edge_id"]] = jnp.sum(
-                key_sent_attributes * key_received_attributes, axis=1
+                key_sent_attributes * key_received_attributes, axis=-1
             ) / jnp.sqrt(self.config.network_config.graph_attention_key_dim)
 
             # Compute the softmax weights on the entire tree.
@@ -214,14 +214,22 @@ class GraphMultiHeadAttentionLayer(nn.Module):
                 jnp.stack(nodes_seg_sum_from_each_attn_head), axis=0
             )
         else:
-            nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=1)
+            nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=-1)
+
+        nodes_seg_sum = nodes_seg_sum.swapaxes(-1, -2)
+
+        nodes_seg_sum = nn.Dense(
+            1,
+            kernel_init=orthogonal(jnp.sqrt(2)),
+            bias_init=constant(0.0),
+        )(nodes_seg_sum)
+        nodes_seg_sum = nn.relu(nodes_seg_sum).squeeze(axis=-1)
 
         ode_params = self.param('neural_ode',
                                 lambda rng: self.neural_ode.init(rng, jnp.zeros_like(nodes_seg_sum)))
         nodes = self.neural_ode.apply(ode_params, nodes_seg_sum)
 
         nodes = nodes.swapaxes(0, 1)
-        nodes = nodes.reshape(nodes.shape[:1] + (-1,))
 
         return graph._replace(nodes=nodes)
 
@@ -257,7 +265,8 @@ class GraphStackedMultiHeadAttention(nn.Module):
         entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
             entity_type
         )
-        nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+        # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+        nodes = jnp.concatenate([nodes[:, None, ..., :-1], entity_emb[:, None]], axis=-1)
 
         graph = jraph.GraphsTuple(
             nodes=nodes,
