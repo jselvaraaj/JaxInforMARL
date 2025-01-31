@@ -104,7 +104,8 @@ class DiscreteNeuralODE(nn.Module):
     @nn.compact
     def __call__(self, y0):
         final_state, states = DiscreteNeuralODEScannedRNNCell(self.config)(y0, None)
-        return states
+        # switches time, batch, features to batch, time, features
+        return states.swapaxes(0, 1)
 
 
 # noinspection DuplicatedCode
@@ -157,6 +158,14 @@ class ActorRNN(nn.Module):
         pi = distrax.Categorical(logits=action_logits)
 
         return hidden, pi
+
+
+class PathNet(nn.Module):
+
+    @nn.compact
+    def __call__(self, x):
+        x = jnp.sum(x, axis=-2)
+        return x
 
 
 # This is built off of the GAT implementation in jraph
@@ -237,11 +246,8 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         else:
             nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=-1)
 
-        nodes_seg_sum = jnp.sum(nodes_seg_sum, axis=-2)
-
+        nodes_seg_sum = PathNet()(nodes_seg_sum)
         nodes = DiscreteNeuralODE(self.config)(nodes_seg_sum)
-
-        nodes = nodes.swapaxes(0, 1)
 
         return graph._replace(nodes=nodes)
 
@@ -298,6 +304,8 @@ class GraphStackedMultiHeadAttention(nn.Module):
         graph = GraphMultiHeadAttentionLayer(self.config)(graph, avg_multi_head=True)
 
         nodes, edges, receivers, senders, _, n_node, n_edge = graph
+
+        nodes = PathNet()(nodes)
 
         # note the other elements in the graph are still in jraph compatible format
         # but not reverting it back since won't be using it anymore
