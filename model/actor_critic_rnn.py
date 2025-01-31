@@ -82,6 +82,36 @@ class NeuralODE(PyTreeNode):
         return yn
 
 
+class DiscreteNeuralODERNNCell(nn.Module):
+    dt: float
+    derivative_net: nn.Module
+
+    @nn.compact
+    def __call__(self, state):
+        dy = self.derivative_net(state)
+        new_state = state + self.dt * dy
+        return new_state
+
+
+class DiscreteNeuralODE(nn.Module):
+    derivative_net: nn.Module
+    config: MAPPOConfig
+
+    @nn.compact
+    def __call__(self, y0):
+        dt = self.config.network_config.discrete_node_dt
+        steps = self.config.network_config.discrete_node_steps
+
+        rnn_cell = DiscreteNeuralODERNNCell(dt=dt, derivative_net=self.derivative_net)
+
+        def step_fn(state, _):
+            new_state = rnn_cell(state)
+            return new_state, new_state  # carry and output are both the new state
+
+        final_state, states = jax.lax.scan(step_fn, y0, None, length=steps)
+        return states
+
+
 # noinspection DuplicatedCode
 class ActorRNN(nn.Module):
     action_dim: list[int]

@@ -103,6 +103,9 @@ class NetworkConfig(NamedTuple):
     node_hidden_dim: int = 8
     node_num_layers: int = 2
 
+    discrete_node_dt: float = 0.2
+    discrete_node_steps: int = 5
+
 
 class WandbConfig(NamedTuple):
     entity: str = "josssdan"
