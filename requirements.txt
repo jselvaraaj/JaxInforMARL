@@ -1,17 +1,17 @@
 # python=3.10
 
 # formatting
-black
-ruff
+# black
+# ruff
 
 # logging
 wandb
 
 # Visualization
-seaborn
-plotly
-dash
-dash-bootstrap-components
+# seaborn
+# plotly
+# dash
+# dash-bootstrap-components
 
 
 # JAX
