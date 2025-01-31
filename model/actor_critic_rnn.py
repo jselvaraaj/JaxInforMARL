@@ -237,14 +237,7 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         else:
             nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=-1)
 
-        nodes_seg_sum = nodes_seg_sum.swapaxes(-1, -2)
-
-        nodes_seg_sum = nn.Dense(
-            1,
-            kernel_init=orthogonal(jnp.sqrt(2)),
-            bias_init=constant(0.0),
-        )(nodes_seg_sum)
-        nodes_seg_sum = nn.relu(nodes_seg_sum).squeeze(axis=-1)
+        nodes_seg_sum = jnp.sum(nodes_seg_sum, axis=-2)
 
         nodes = DiscreteNeuralODE(self.config)(nodes_seg_sum)
 
