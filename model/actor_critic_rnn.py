@@ -246,9 +246,8 @@ class GraphMultiHeadAttentionLayer(nn.Module):
         else:
             nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=-1)
 
-        # nodes_seg_sum = PathNet()(nodes_seg_sum)
-        # nodes = DiscreteNeuralODE(self.config)(nodes_seg_sum)
-        nodes = nodes_seg_sum
+        nodes_seg_sum = PathNet()(nodes_seg_sum)
+        nodes = DiscreteNeuralODE(self.config)(nodes_seg_sum)
 
         return graph._replace(nodes=nodes)
 
