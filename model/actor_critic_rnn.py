@@ -126,8 +126,8 @@ class ActorRNN(nn.Module):
         )(obs)
         embedding = nn.relu(embedding)
 
-        # rnn_in = (embedding, dones)
-        # hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        rnn_in = (embedding, dones)
+        hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
         # ode_params = self.param('neural_ode',
         #                         lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
@@ -362,8 +362,8 @@ class CriticRNN(nn.Module):
         )(world_state)
         embedding = nn.relu(embedding)
 
-        # rnn_in = (embedding, dones)
-        # hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        rnn_in = (embedding, dones)
+        hidden, embedding = ScannedRNN()(hidden, rnn_in)
         # ode_params = self.param('neural_ode',
         #                         lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
         # embedding = self.neural_ode.apply(ode_params, embedding)[-1]
