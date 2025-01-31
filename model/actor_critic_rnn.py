@@ -1,12 +1,14 @@
 import functools
 from typing import Literal
 
+import diffrax
 import distrax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jraph
 from flax.linen.initializers import constant, orthogonal
+from flax.struct import PyTreeNode
 from jaxtyping import Array, Float
 from jraph._src import utils
 
@@ -40,10 +42,52 @@ class ScannedRNN(nn.Module):
         return cell.initialize_carry(jax.random.PRNGKey(0), (batch_size, hidden_size))
 
 
+class EmbeddingDerivativeNet(nn.Module):
+    config: MAPPOConfig
+
+    @nn.compact
+    def __call__(self, y):
+        for _ in range(self.config.network_config.actor_num_hidden_linear_layer - 1):
+            y = nn.Dense(
+                self.config.network_config.gru_hidden_dim,
+                kernel_init=orthogonal(2),
+                bias_init=constant(0.0),
+            )(y)
+            y = nn.relu(y)
+
+        return y
+
+
+class NeuralODE(PyTreeNode):
+    derivative_net: nn.Module
+
+    def init(self, rng, coords):
+        rng, derivative_net_rng = jax.random.split(rng)
+        coords, derivative_net_params = self.derivative_net.init_with_output(derivative_net_rng, coords)
+
+        return {
+            "derivative_net": derivative_net_params,
+        }
+
+    def apply(self, params, y0):
+        def f(t, y, args):
+            return self.derivative_net.apply(params["derivative_net"], y)
+
+        term = diffrax.ODETerm(f)
+        solver = diffrax.Tsit5()
+        solution = diffrax.diffeqsolve(term, solver, t0=0, t1=1, dt0=0.1, y0=y0)
+        yn = solution.ys[-1]
+        return yn
+
+
 # noinspection DuplicatedCode
 class ActorRNN(nn.Module):
     action_dim: list[int]
     config: MAPPOConfig
+
+    neural_ode: NeuralODE = NeuralODE(
+        derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
+    )
 
     @nn.compact
     def __call__(self, hidden, x):
@@ -57,6 +101,10 @@ class ActorRNN(nn.Module):
 
         # rnn_in = (embedding, dones)
         # hidden, embedding = ScannedRNN()(hidden, rnn_in)
+
+        ode_params = self.param('neural_ode',
+                                lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
+        embedding = self.neural_ode.apply(ode_params, embedding)
 
         for _ in range(self.config.network_config.actor_num_hidden_linear_layer - 1):
             embedding = nn.Dense(
@@ -253,6 +301,9 @@ class GraphAttentionActorRNN(nn.Module):
 # noinspection DuplicatedCode
 class CriticRNN(nn.Module):
     config: MAPPOConfig
+    neural_ode: NeuralODE = NeuralODE(
+        derivative_net=EmbeddingDerivativeNet(MAPPOConfig.create()),
+    )
 
     @nn.compact
     def __call__(self, hidden, x):
@@ -279,6 +330,9 @@ class CriticRNN(nn.Module):
 
         # rnn_in = (embedding, dones)
         # hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        ode_params = self.param('neural_ode',
+                                lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
+        embedding = self.neural_ode.apply(ode_params, embedding)
 
         for _ in range(self.config.network_config.critic_num_hidden_linear_layer - 1):
             embedding = nn.Dense(

@@ -24,3 +24,6 @@ dash-bootstrap-components
     distrax
     optax
     orbax
+
+    #NODE
+    diffrax
