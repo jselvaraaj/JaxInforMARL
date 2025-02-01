@@ -104,7 +104,7 @@ class NetworkConfig(NamedTuple):
     node_num_layers: int = 2
 
     discrete_node_dt: float = 0.2
-    discrete_node_steps: int = 1
+    discrete_node_steps: int = 3
 
 
 class WandbConfig(NamedTuple):

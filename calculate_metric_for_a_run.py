@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from calculate_metric import get_stats_for_state
 from visualize_actor import get_state_traj
 
-artifact_version = "455"
+artifact_version = "564"
 num_episodes = 100
 model_artifact_remote_name = (
     f"josssdan/JaxInforMARL/PPO_RNN_Runner_State:v{artifact_version}"

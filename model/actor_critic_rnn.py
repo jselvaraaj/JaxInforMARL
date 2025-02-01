@@ -164,7 +164,14 @@ class PathNet(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        x = jnp.sum(x, axis=-2)
+        # x = jnp.sum(x, axis=-2)
+        x = x.swapaxes(-1, -2)
+        x = nn.Dense(
+            1,
+            kernel_init=orthogonal(jnp.sqrt(2)),
+            bias_init=constant(0.0),
+        )(x)
+        x = nn.relu(x).squeeze(axis=-1)
         return x
 
 
