@@ -289,7 +289,8 @@ class GraphStackedMultiHeadAttention(nn.Module):
 
         # Embed entity and compute node features.
         entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
+        entity_emb = nn.Embed(self.config.derived_values.num_entity_types,
+                              self.config.network_config.entity_type_embedding_dim)(
             entity_type
         )
         # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
@@ -340,7 +341,8 @@ class GraphAttentionActorRNN(nn.Module):
             nodes = graph.nodes
             # Embed entity_type.
             entity_type = nodes[..., -1].astype(jnp.int32)
-            entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
+            entity_emb = nn.Embed(self.config.derived_values.num_entity_types,
+                                  self.config.network_config.entity_type_embedding_dim)(
                 entity_type
             )
             nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
@@ -398,7 +400,8 @@ class CriticRNN(nn.Module):
             nodes = graph.nodes
             # Embed entity_type.
             entity_type = nodes[..., -1].astype(jnp.int32)
-            entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
+            entity_emb = nn.Embed(self.config.derived_values.num_entity_types
+                                  , self.config.network_config.entity_type_embedding_dim)(
                 entity_type
             )
             nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)

@@ -110,8 +110,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         self.agent_communication_type = agent_communication_type
 
-        self.agent_entity_type = 0
-        self.landmark_entity_type = 1
+        self.agent_entity_type = self.entity_indices[: self.num_agents]
+        self.landmark_entity_type = self.entity_indices[self.num_agents:]
 
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]
@@ -378,9 +378,9 @@ class TargetMPEEnvironment(MultiAgentEnv):
                 entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
             )
 
-            goal_relative_coord = (
-                    state.entity_positions[goal_idx] - state.entity_positions[agent_id]
-            )
+            # goal_relative_coord = (
+            #         state.entity_positions[goal_idx] - state.entity_positions[agent_id]
+            # )
             relative_position = (
                     state.entity_positions[entity_idx] - state.entity_positions[agent_id]
             )
@@ -389,8 +389,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
             )
             entity_type = jnp.where(
                 entity_idx < self.num_agents,
-                self.agent_entity_type,
-                self.landmark_entity_type,
+                self.agent_entity_type[entity_idx],
+                self.landmark_entity_type[entity_idx - self.num_agents],
             )
             node_communication_message = jnp.asarray([])
             if self.agent_communication_type is not None:
@@ -401,7 +401,6 @@ class TargetMPEEnvironment(MultiAgentEnv):
                         node_communication_message,
                         relative_position,
                         relative_velocity,
-                        goal_relative_coord,
                         jnp.array([entity_type]),
                     ]
                 ),

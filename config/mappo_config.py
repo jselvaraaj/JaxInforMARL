@@ -127,6 +127,7 @@ class DerivedValues(NamedTuple):
     num_updates: int
     minibatch_size: int
     scaled_clip_eps: float
+    num_entity_types: int
 
 
 class MAPPOConfig(NamedTuple):
@@ -147,6 +148,7 @@ class MAPPOConfig(NamedTuple):
     ) -> MAPPOConfig:
         num_actors = env_config.env_kwargs.num_agents * training_config.num_envs
         batch_size = num_actors * training_config.ppo_config.num_steps_per_update
+        num_entity_types = env_config.env_kwargs.num_agents * 2
         _derived_values = DerivedValues(
             num_actors=num_actors,
             num_updates=int(
@@ -162,6 +164,7 @@ class MAPPOConfig(NamedTuple):
                 if training_config.ppo_config.is_clip_eps_per_env
                 else training_config.ppo_config.clip_eps
             ),
+            num_entity_types=num_entity_types
         )
         if not testing:
             assert (
