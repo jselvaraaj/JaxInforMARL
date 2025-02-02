@@ -432,9 +432,10 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         edge_features = distances[valid_agent_idx, valid_entity_idx][..., None]
 
-        # add self edges for landmarks
-        receivers = jnp.concatenate([self.landmark_indices, receivers])
-        senders = jnp.concatenate([self.landmark_indices, senders])
+        if self.add_self_edges_to_nodes:
+            # add self edges for landmarks
+            receivers = jnp.concatenate([self.landmark_indices, receivers])
+            senders = jnp.concatenate([self.landmark_indices, senders])
         edge_features = jnp.concatenate(
             [edge_features, jnp.zeros(self.num_landmarks)[..., None]]
         )

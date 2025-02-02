@@ -359,20 +359,43 @@ class CriticRNN(nn.Module):
     @nn.compact
     def __call__(self, hidden, x):
         _w_s, graph, dones = x
-        nodes = graph.nodes
+        # nodes = graph.nodes
+        #
+        # # Embed entity_type.
+        # entity_type = nodes[..., -1].astype(jnp.int32)
+        # entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
+        #     entity_type
+        # )
+        # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+        # world_state = jnp.sum(
+        #     nodes, axis=2
+        # )  # Aggregate all node features for a given actor and time step
 
-        # Embed entity_type.
-        entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
-            entity_type
-        )
-        nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+        # world_state = PathNet()(world_state)
 
-        world_state = jnp.sum(
-            nodes, axis=2
-        )  # Aggregate all node features for a given actor and time step
+        # this is target mpe specific
+        agent_indices = graph.agent_indices
 
-        world_state = PathNet()(world_state)
+        num_agents = self.config.env_config.env_kwargs.num_agents
+        num_entities = 2 * num_agents
+        senders, receivers = jnp.meshgrid(jnp.arange(num_entities), jnp.arange(num_agents))
+        senders = senders.flatten()
+        receivers = receivers.flatten()
+        senders = jnp.broadcast_to(senders, graph.senders.shape[:-1] + senders.shape)
+        receivers = jnp.broadcast_to(receivers, graph.receivers.shape[:-1] + receivers.shape)
+
+        edges = jnp.zeros(graph.edges.shape[:-2] + (senders.shape[-1], 1))
+
+        graph = graph._replace(senders=senders, receivers=receivers, edges=edges)
+
+        graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
+        nodes = graph_embedding.nodes
+
+        world_state = nodes[
+            jnp.arange(nodes.shape[0])[..., None],
+            jnp.arange(nodes.shape[1])[None, ...],
+            agent_indices,
+        ]
 
         embedding = nn.Dense(
             self.config.network_config.fc_dim_size,
