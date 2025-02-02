@@ -32,9 +32,9 @@ class MPEStateWithBuffer(NamedTuple):
 
 
 def stack_arrays(latest_array, buffer):
-    latest_array = latest_array[..., None]  # Add time axis
-    buffer = jnp.concatenate([latest_array, buffer[..., :-1]], axis=-1)  # Shift and append
-    return buffer.reshape(latest_array.shape[:-2] + (-1,)), buffer
+    latest_array = latest_array[None]
+    buffer = jnp.concatenate([latest_array, buffer[:-1]], axis=0)  # Shift and append
+    return buffer
 
 
 class StackedTargetMPEEnvironment(TargetMPEEnvironment):
@@ -48,15 +48,16 @@ class StackedTargetMPEEnvironment(TargetMPEEnvironment):
         obs_buffer = {}
         nodes_buffer = {}
         for agent in self.agent_labels:
-            obs_buffer[agent] = jnp.zeros((self.observation_space_for_agent(agent).shape[-1], self.stack_size))
-            nodes_buffer[agent] = jnp.zeros(multi_agent_graph[agent].nodes.shape + (self.stack_size,))
+            obs_buffer[agent] = jnp.zeros((self.stack_size, self.observation_space_for_agent(agent).shape[-1]))
+            nodes_buffer[agent] = jnp.zeros((self.stack_size,) + multi_agent_graph[agent].nodes.shape)
 
-            multi_agent_obs[agent], obs_buffer[agent] = stack_arrays(multi_agent_obs[agent],
-                                                                     obs_buffer[agent])
+            obs_buffer[agent] = stack_arrays(multi_agent_obs[agent],
+                                             obs_buffer[agent])
+            multi_agent_obs[agent] = obs_buffer[agent]
 
-            _nodes, nodes_buffer[agent] = stack_arrays(multi_agent_graph[agent].nodes,
-                                                       nodes_buffer[agent])
-
+            nodes_buffer[agent] = stack_arrays(multi_agent_graph[agent].nodes,
+                                               nodes_buffer[agent])
+            _nodes = nodes_buffer[agent].swapaxes(0, 1)
             multi_agent_graph[agent] = multi_agent_graph[agent]._replace(nodes=_nodes)
 
         mpe_state = MPEStateWithBuffer(*mpe_state, obs_buffer=obs_buffer, nodes_buffer=nodes_buffer)
@@ -75,11 +76,14 @@ class StackedTargetMPEEnvironment(TargetMPEEnvironment):
         obs_buffer = state_with_buffer.obs_buffer
         nodes_buffer = state_with_buffer.nodes_buffer
         for agent in self.agent_labels:
-            multi_agent_obs[agent], obs_buffer[agent] = stack_arrays(multi_agent_obs[agent],
-                                                                     obs_buffer[agent])
+            obs_buffer[agent] = stack_arrays(multi_agent_obs[agent],
+                                             obs_buffer[agent])
+            multi_agent_obs[agent] = obs_buffer[agent]
 
-            _nodes, nodes_buffer[agent] = stack_arrays(multi_agent_graph[agent].nodes,
-                                                       nodes_buffer[agent])
+            nodes_buffer[agent] = stack_arrays(multi_agent_graph[agent].nodes,
+                                               nodes_buffer[agent])
+
+            _nodes = nodes_buffer[agent].swapaxes(0, 1)
 
             multi_agent_graph[agent] = multi_agent_graph[agent]._replace(nodes=_nodes)
 

@@ -85,6 +85,8 @@ class TrainingConfig(NamedTuple):
 
 
 class NetworkConfig(NamedTuple):
+    use_rnn: bool = False
+
     fc_dim_size: int = 8
     gru_hidden_dim: int = 8
 

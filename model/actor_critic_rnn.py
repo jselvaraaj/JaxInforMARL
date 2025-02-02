@@ -127,8 +127,9 @@ class ActorRNN(nn.Module):
         )(obs)
         embedding = nn.relu(embedding)
 
-        # rnn_in = (embedding, dones)
-        # hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        if self.config.network_config.use_rnn:
+            rnn_in = (embedding, dones)
+            hidden, embedding = ScannedRNN()(hidden, rnn_in)
 
         # ode_params = self.param('neural_ode',
         #                         lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
@@ -164,14 +165,15 @@ class PathNet(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        x = x[..., -1, :]
         # x = jnp.sum(x, axis=-2)
-        x = x.swapaxes(-1, -2)
-        x = nn.Dense(
-            1,
-            kernel_init=orthogonal(jnp.sqrt(2)),
-            bias_init=constant(0.0),
-        )(x)
-        x = nn.relu(x).squeeze(axis=-1)
+        # x = x.swapaxes(-1, -2)
+        # x = nn.Dense(
+        #     1,
+        #     kernel_init=orthogonal(jnp.sqrt(2)),
+        #     bias_init=constant(0.0),
+        # )(x)
+        # x = nn.relu(x).squeeze(axis=-1)
         return x
 
 
@@ -247,14 +249,14 @@ class GraphMultiHeadAttentionLayer(nn.Module):
             nodes_seg_sum_from_each_attn_head.append(nodes_seg_sum)
 
         if avg_multi_head:
-            nodes_seg_sum = jnp.mean(
+            nodes = jnp.mean(
                 jnp.stack(nodes_seg_sum_from_each_attn_head), axis=0
             )
         else:
-            nodes_seg_sum = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=-1)
+            nodes = jnp.concatenate(nodes_seg_sum_from_each_attn_head, axis=-1)
 
-        # nodes_seg_sum = PathNet()(nodes_seg_sum)
-        # nodes = DiscreteNeuralODE(self.config)(nodes_seg_sum)
+        # nodes = PathNet()(nodes)
+        # nodes = DiscreteNeuralODE(self.config)(nodes)
 
         return graph._replace(nodes=nodes)
 
@@ -269,10 +271,10 @@ class GraphStackedMultiHeadAttention(nn.Module):
         # Make the given graph into jraph compatible format
         nodes, edges, receivers, senders, _, n_node, n_edge, _ = graph
 
-        num_time_steps, num_actors, num_nodes, node_feature_dim = nodes.shape
+        num_time_steps, num_actors, num_nodes, rolling_memory_dim, node_feature_dim = nodes.shape
         _, _, num_edges, edge_feature_dim = edges.shape
         num_graph = num_time_steps * num_actors
-        nodes = nodes.reshape((num_graph * num_nodes, node_feature_dim))
+        nodes = nodes.reshape((num_graph * num_nodes, rolling_memory_dim, node_feature_dim))
         edges = edges.reshape((num_graph * num_edges, edge_feature_dim))
 
         index_offset = jnp.arange(num_graph).reshape(num_time_steps, num_actors)[
@@ -291,7 +293,7 @@ class GraphStackedMultiHeadAttention(nn.Module):
             entity_type
         )
         # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
-        nodes = jnp.concatenate([nodes[:, None, ..., :-1], entity_emb[:, None]], axis=-1)
+        nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
 
         graph = jraph.GraphsTuple(
             nodes=nodes,
@@ -370,6 +372,8 @@ class CriticRNN(nn.Module):
             nodes, axis=2
         )  # Aggregate all node features for a given actor and time step
 
+        world_state = PathNet()(world_state)
+
         embedding = nn.Dense(
             self.config.network_config.fc_dim_size,
             kernel_init=orthogonal(jnp.sqrt(2)),
@@ -377,8 +381,10 @@ class CriticRNN(nn.Module):
         )(world_state)
         embedding = nn.relu(embedding)
 
-        # rnn_in = (embedding, dones)
-        # hidden, embedding = ScannedRNN()(hidden, rnn_in)
+        if self.config.network_config.use_rnn:
+            rnn_in = (embedding, dones)
+            hidden, embedding = ScannedRNN()(hidden, rnn_in)
+
         # ode_params = self.param('neural_ode',
         #                         lambda rng: self.neural_ode.init(rng, jnp.zeros_like(embedding)))
         # embedding = self.neural_ode.apply(ode_params, embedding)[-1]

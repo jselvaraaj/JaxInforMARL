@@ -79,7 +79,8 @@ class TransitionWithActionField(NamedTuple):
 def batchify(x: dict, agent_list, num_actors):
     x = jnp.stack([x[a] for a in agent_list])
     return x.reshape(
-        (num_actors, -1)
+        (num_actors, -1)  # this will concatenate the obs from all previous rolling memory
+        # i don't want that but i am not using obs any ways so deferring to fix it.
     )  # [agent_0_env_1, agent_0_env_2 ....agent_n_env_(m-1), agent_n_env_m]
 
 
@@ -101,7 +102,7 @@ def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
         nodes, edges, receivers, senders, _, n_node, n_edge, agent_indices = graph[
             agent_label
         ]
-        num_env, _, _ = nodes.shape
+        num_env, _, _, _ = nodes.shape
         receivers = receivers.astype(jnp.int32)
         senders = senders.astype(jnp.int32)
 
@@ -156,7 +157,8 @@ def get_actor_init_input(config: MAPPOConfig, env):
         (
             num_env,
             env.num_entities,
-            node_feature_dim * agent_previous_obs_stack_size,
+            agent_previous_obs_stack_size,
+            node_feature_dim,
         )
     )
     nodes = nodes.at[..., -1].set(1)  # entity type
