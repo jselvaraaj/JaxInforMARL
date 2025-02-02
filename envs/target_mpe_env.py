@@ -383,7 +383,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
         def get_node_feature(
                 entity_idx: Int[Array, EntityIndexAxis],
                 agent_id: Int[Array, AgentIndexAxis],
-        ) -> Int[Array, f"{AgentIndexAxis} {EntityIndexAxis}  7"]:
+        ) -> tuple[Int[Array, f"{AgentIndexAxis} {EntityIndexAxis}  num_equivariant_features 2"], Int[
+            Array, f"{AgentIndexAxis} {EntityIndexAxis}  num_non_equivariant_features"]]:
             goal_idx = jnp.where(
                 entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
             )
@@ -406,17 +407,17 @@ class TargetMPEEnvironment(MultiAgentEnv):
             node_communication_message = jnp.asarray([])
             if self.agent_communication_type is not None:
                 node_communication_message = communication_message[entity_idx]
-            return jnp.concatenate(
-                (
-                    [
-                        node_communication_message,
-                        relative_position,
-                        relative_velocity,
-                        goal_relative_coord,
-                        jnp.array([entity_type]),
-                    ]
-                ),
+
+            equivariant_node_features = jnp.stack(
+                [relative_position,
+                 relative_velocity,
+                 goal_relative_coord]
             )
+            non_equivariant_node_features = jnp.concatenate(
+                [node_communication_message, jnp.array([entity_type])]
+            )
+
+            return equivariant_node_features, non_equivariant_node_features
 
         ### 2) Compute pairwise distances in one shot
         # agent_positions shape: (num_agents, 2)
@@ -455,14 +456,17 @@ class TargetMPEEnvironment(MultiAgentEnv):
         # receivers, senders, edge_features = jax.tree.map(jnp.ravel, edges)
         # receivers, senders = add_landmark_self_edges(receivers, senders)
 
-        node_features_for_all_agents = get_node_feature(
+        equivariant_node_features, non_equivariant_node_features = get_node_feature(
             self.entity_indices, self.agent_indices
         )
         n_node = jnp.array([self.num_entities])
         n_edge = jnp.array([receivers.shape[0]])
         agent_label_to_graph = {
             agent_label: GraphsTupleWithAgentIndex(
-                nodes=node_features_for_all_agents[
+                equivariant_nodes=equivariant_node_features[
+                    self.agent_labels_to_index[agent_label]
+                ],
+                non_equivariant_nodes=non_equivariant_node_features[
                     self.agent_labels_to_index[agent_label]
                 ],
                 edges=edge_features,

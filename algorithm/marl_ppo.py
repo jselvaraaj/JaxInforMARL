@@ -91,7 +91,9 @@ def unbatchify(x: Array, agent_list, num_envs, num_agents):
 
 @jaxtyped(typechecker=beartype)
 def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
-    nodes_for_all_agents = []
+    equivariant_nodes_for_all_agents = []
+    non_equivariant_nodes_for_all_agents = []
+
     edges_for_all_agents = []
     receivers_for_all_agents = []
     senders_for_all_agents = []
@@ -99,17 +101,18 @@ def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
     agent_indices_for_all_agents = []
     n_edge_for_all_agents = []
     for agent_label in graph:
-        nodes, edges, receivers, senders, _, n_node, n_edge, agent_indices = graph[
+        equivariant_nodes, non_equivariant_nodes, edges, receivers, senders, _, n_node, n_edge, agent_indices = graph[
             agent_label
         ]
-        num_env, _, _, _ = nodes.shape
+        num_env, *_ = equivariant_nodes.shape
         receivers = receivers.astype(jnp.int32)
         senders = senders.astype(jnp.int32)
 
         n_node = n_node.flatten()
         n_edge = n_edge.flatten()
 
-        nodes_for_all_agents.append(nodes)
+        equivariant_nodes_for_all_agents.append(equivariant_nodes)
+        non_equivariant_nodes_for_all_agents.append(non_equivariant_nodes)
         edges_for_all_agents.append(edges)
         receivers_for_all_agents.append(receivers)
         senders_for_all_agents.append(senders)
@@ -121,7 +124,8 @@ def batchify_graph(graph: MultiAgentGraph, agent_label_index: dict[str, int]):
         return jnp.stack(x).reshape(-1, *x[0].shape[1:])
 
     return GraphsTupleWithAgentIndex(
-        nodes=_stack_all_agent(nodes_for_all_agents),
+        equivariant_nodes=_stack_all_agent(equivariant_nodes_for_all_agents),
+        non_equivariant_nodes=_stack_all_agent(non_equivariant_nodes_for_all_agents),
         n_node=_stack_all_agent(n_node_for_all_agents),
         edges=_stack_all_agent(edges_for_all_agents),
         receivers=_stack_all_agent(receivers_for_all_agents),
@@ -143,27 +147,37 @@ def make_env_from_config(config: MAPPOConfig):
 
 def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
-    node_feature_dim = 5
+    num_coordinate = 2
+    node_num_equivariant_feature = 2
     if config.env_config.env_kwargs.add_target_goal_to_nodes:
-        node_feature_dim += 2
+        node_num_equivariant_feature += 1
     communication_type = config.env_config.env_kwargs.agent_communication_type
     agent_previous_obs_stack_size = config.env_config.env_kwargs.agent_previous_obs_stack_size
+    node_non_equivariant_feature_dim = 1
     if communication_type == CommunicationType.HIDDEN_STATE.value:
-        node_feature_dim += config.network_config.gru_hidden_dim
+        node_non_equivariant_feature_dim += config.network_config.gru_hidden_dim
     elif (
             communication_type == CommunicationType.PAST_ACTION.value
             or communication_type == CommunicationType.CURRENT_ACTION.value
     ):
-        node_feature_dim += 1
-    nodes = jnp.zeros(
+        node_non_equivariant_feature_dim += 1
+    equivariant_nodes = jnp.zeros(
         (
             num_env,
             env.num_entities,
             agent_previous_obs_stack_size,
-            node_feature_dim,
+            node_num_equivariant_feature,
+            num_coordinate
         )
     )
-    nodes = nodes.at[..., -1].set(1)  # entity type
+    non_equivariant_nodes = jnp.zeros(
+        (
+            num_env,
+            env.num_entities,
+            agent_previous_obs_stack_size,
+            node_non_equivariant_feature_dim,
+        )
+    )
 
     edges = jnp.arange(num_env * 2 * env.num_agents).reshape(
         num_env,
@@ -198,7 +212,8 @@ def get_actor_init_input(config: MAPPOConfig, env):
     graph_init = batchify_graph(
         {
             agent_label: GraphsTupleWithAgentIndex(
-                nodes=nodes,
+                equivariant_nodes=equivariant_nodes,
+                non_equivariant_nodes=non_equivariant_nodes,
                 edges=edges,
                 globals=None,
                 receivers=receivers,

@@ -269,12 +269,12 @@ class GraphStackedMultiHeadAttention(nn.Module):
         """Applies a Graph Attention layer."""
 
         # Make the given graph into jraph compatible format
-        nodes, edges, receivers, senders, _, n_node, n_edge, _ = graph
+        equivariant_nodes, _, edges, receivers, senders, _, n_node, n_edge, _ = graph
 
-        num_time_steps, num_actors, num_nodes, rolling_memory_dim, node_feature_dim = nodes.shape
+        num_time_steps, num_actors, num_nodes, rolling_memory_dim, *node_feature_dim = equivariant_nodes.shape
         _, _, num_edges, edge_feature_dim = edges.shape
         num_graph = num_time_steps * num_actors
-        nodes = nodes.reshape((num_graph * num_nodes, rolling_memory_dim, node_feature_dim))
+        nodes = equivariant_nodes.reshape((num_graph * num_nodes, rolling_memory_dim, *node_feature_dim))
         edges = edges.reshape((num_graph * num_edges, edge_feature_dim))
 
         index_offset = jnp.arange(num_graph).reshape(num_time_steps, num_actors)[
@@ -286,15 +286,6 @@ class GraphStackedMultiHeadAttention(nn.Module):
         senders = senders.flatten()
         n_node = n_node.flatten()
         n_edge = n_edge.flatten()
-
-        # Embed entity and compute node features.
-        entity_type = nodes[..., -1].astype(jnp.int32)
-        entity_emb = nn.Embed(self.config.derived_values.num_entity_types,
-                              self.config.network_config.entity_type_embedding_dim)(
-            entity_type
-        )
-        # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
-        nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
 
         graph = jraph.GraphsTuple(
             nodes=nodes,
@@ -336,9 +327,12 @@ class GraphAttentionActorRNN(nn.Module):
 
         if self.config.network_config.use_graph_attention_in_actor:
             graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
-            nodes = graph_embedding.nodes
+            equivariant_nodes = graph_embedding.nodes
         else:
-            nodes = graph.nodes
+            equivariant_nodes = graph.equivariant_nodes.reshape(
+                graph.equivariant_nodes.shape[:-2] + (-1,)
+            )
+            nodes = jnp.concatenate([equivariant_nodes, graph.non_equivariant_nodes], axis=-1)
             # Embed entity_type.
             entity_type = nodes[..., -1].astype(jnp.int32)
             entity_emb = nn.Embed(self.config.derived_values.num_entity_types,
@@ -397,7 +391,10 @@ class CriticRNN(nn.Module):
                 agent_indices,
             ]
         else:
-            nodes = graph.nodes
+            equivariant_nodes = graph.equivariant_nodes.reshape(
+                graph.equivariant_nodes.shape[:-2] + (-1,)
+            )
+            nodes = jnp.concatenate([equivariant_nodes, graph.non_equivariant_nodes], axis=-1)
             # Embed entity_type.
             entity_type = nodes[..., -1].astype(jnp.int32)
             entity_emb = nn.Embed(self.config.derived_values.num_entity_types

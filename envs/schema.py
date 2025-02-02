@@ -5,7 +5,8 @@ from jaxtyping import Array, Bool, jaxtyped
 
 
 class GraphsTupleWithAgentIndex(NamedTuple):
-    nodes: Array | None
+    equivariant_nodes: Array | None
+    non_equivariant_nodes: Array | None
     edges: Array | None
     receivers: Array | None
     senders: Array | None
