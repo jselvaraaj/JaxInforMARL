@@ -46,7 +46,7 @@ class EmbeddingDerivativeNet(nn.Module):
     @nn.compact
     def __call__(self, y):
         output_dim = y.shape[-1]
-        for _ in range(self.config.network_config.node_num_layers):
+        for _ in range(self.config.network_config.neural_ode_num_layers):
             y = nn.Dense(
                 output_dim,
                 kernel_init=orthogonal(2),
@@ -89,12 +89,12 @@ class DiscreteNeuralODEScannedRNNCell(nn.Module):
         in_axes=0,
         out_axes=0,
         split_rngs={"params": False},
-        length=MAPPOConfig.create().network_config.discrete_node_steps
+        length=MAPPOConfig.create().network_config.neural_ODE_config.steps
     )
     @nn.compact
     def __call__(self, state, unused):
         dy = EmbeddingDerivativeNet(self.config)(state)
-        new_state = state + self.config.network_config.discrete_node_dt * dy
+        new_state = state + self.config.network_config.neural_ODE_config.dt * dy
         return new_state, new_state
 
 
