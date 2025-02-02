@@ -96,7 +96,7 @@ class NeuralODEConfig(NamedTuple):
 
 class NetworkConfig(NamedTuple):
     use_rnn: bool = False
-    use_graph_attention_in_actor: bool = False
+    use_graph_attention_in_actor: bool = True
     use_graph_attention_in_critic: bool = False
 
     fc_dim_size: int = 8

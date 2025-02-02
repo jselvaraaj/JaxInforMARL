@@ -230,7 +230,8 @@ class GraphMultiHeadAttentionLayer(nn.Module):
 
             key_edge_features = key_projection(edge_features)
 
-            key_received_attributes = key_received_attributes + key_edge_features[:, None]
+            key_received_attributes = key_received_attributes + key_edge_features[:, None,
+                                                                None]
 
             softmax_logits: Float[Array, Literal["edge_id"]] = jnp.sum(
                 key_sent_attributes * key_received_attributes, axis=-1
@@ -301,12 +302,13 @@ class GraphStackedMultiHeadAttention(nn.Module):
             graph = GraphMultiHeadAttentionLayer(self.config)(
                 graph, avg_multi_head=False
             )
+        graph = graph._replace(nodes=jnp.sum(graph.nodes, axis=-2)[..., None, :])
         # Average the multi-head attention for the last layer
         graph = GraphMultiHeadAttentionLayer(self.config)(graph, avg_multi_head=True)
 
         nodes, edges, receivers, senders, _, n_node, n_edge = graph
 
-        nodes = PathNet()(nodes)
+        nodes = PathNet()(nodes[..., 0, :])
 
         # note the other elements in the graph are still in jraph compatible format
         # but not reverting it back since won't be using it anymore
@@ -328,6 +330,7 @@ class GraphAttentionActorRNN(nn.Module):
         if self.config.network_config.use_graph_attention_in_actor:
             graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
             equivariant_nodes = graph_embedding.nodes
+            nodes = equivariant_nodes
         else:
             equivariant_nodes = graph.equivariant_nodes.reshape(
                 graph.equivariant_nodes.shape[:-2] + (-1,)
