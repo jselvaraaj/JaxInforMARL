@@ -144,6 +144,8 @@ def make_env_from_config(config: MAPPOConfig):
 def get_actor_init_input(config: MAPPOConfig, env):
     num_env = config.training_config.num_envs
     node_feature_dim = 5
+    if config.env_config.env_kwargs.add_target_goal_to_nodes:
+        node_feature_dim += 2
     communication_type = config.env_config.env_kwargs.agent_communication_type
     agent_previous_obs_stack_size = config.env_config.env_kwargs.agent_previous_obs_stack_size
     if communication_type == CommunicationType.HIDDEN_STATE.value:

@@ -20,9 +20,9 @@ class EnvKwArgs(NamedTuple):
 
     num_agents: int = 3
     max_steps: int = 50
-    collision_reward_coefficient: float = -1
-    one_time_death_reward: int = 5
-    distance_to_goal_reward_coefficient: int = 10
+    collision_reward_coefficient: float = -10
+    one_time_death_reward: int = 10
+    distance_to_goal_reward_coefficient: int = 1
     entity_acceleration: int = 5
 
     agent_max_speed: int = -1
@@ -35,6 +35,8 @@ class EnvKwArgs(NamedTuple):
     agent_communication_type: CommunicationType.value = None
     agent_control_noise_std: float = 0.0
     add_self_edges_to_nodes: bool = True
+
+    add_target_goal_to_nodes: bool = True
 
     agent_previous_obs_stack_size: int = 1
 

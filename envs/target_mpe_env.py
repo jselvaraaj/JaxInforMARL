@@ -88,6 +88,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             agent_control_noise_std=0,
             add_self_edges_to_nodes=False,
             distance_to_goal_reward_coefficient=5,
+            add_target_goal_to_nodes=True,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -120,6 +121,8 @@ class TargetMPEEnvironment(MultiAgentEnv):
         )
 
         self.add_self_edges_to_nodes = add_self_edges_to_nodes
+
+        self.add_target_goal_to_nodes = add_target_goal_to_nodes
 
         assert action_type in [DISCRETE_ACT, CONTINUOUS_ACT], "Invalid action type"
         if action_type == DISCRETE_ACT:
@@ -377,10 +380,11 @@ class TargetMPEEnvironment(MultiAgentEnv):
             goal_idx = jnp.where(
                 entity_idx < self.num_agents, self.num_agents + entity_idx, entity_idx
             )
-
-            # goal_relative_coord = (
-            #         state.entity_positions[goal_idx] - state.entity_positions[agent_id]
-            # )
+            goal_relative_coord = jnp.asarray([])
+            if self.add_target_goal_to_nodes:
+                goal_relative_coord = (
+                        state.entity_positions[goal_idx] - state.entity_positions[agent_id]
+                )
             relative_position = (
                     state.entity_positions[entity_idx] - state.entity_positions[agent_id]
             )
@@ -401,6 +405,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
                         node_communication_message,
                         relative_position,
                         relative_velocity,
+                        goal_relative_coord,
                         jnp.array([entity_type]),
                     ]
                 ),
