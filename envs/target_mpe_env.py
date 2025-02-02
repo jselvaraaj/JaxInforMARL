@@ -89,6 +89,7 @@ class TargetMPEEnvironment(MultiAgentEnv):
             add_self_edges_to_nodes=False,
             distance_to_goal_reward_coefficient=5,
             add_target_goal_to_nodes=True,
+            heterogeneous_agents=False,
     ):
         super().__init__(
             num_agents=num_agents,
@@ -111,8 +112,14 @@ class TargetMPEEnvironment(MultiAgentEnv):
 
         self.agent_communication_type = agent_communication_type
 
-        self.agent_entity_type = self.entity_indices[: self.num_agents]
-        self.landmark_entity_type = self.entity_indices[self.num_agents:]
+        self.heterogeneous_agents = heterogeneous_agents
+
+        if heterogeneous_agents:
+            self.agent_entity_type = self.entity_indices[: self.num_agents]
+            self.landmark_entity_type = self.entity_indices[self.num_agents:]
+        else:
+            self.agent_entity_type = jnp.zeros(self.num_agents)
+            self.landmark_entity_type = jnp.ones(self.num_landmarks)
 
         # Assumption agent_i corresponds to landmark_i
         self.landmark_labels = [f"landmark_{i}" for i in range(self.num_landmarks)]

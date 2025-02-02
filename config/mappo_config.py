@@ -37,6 +37,7 @@ class EnvKwArgs(NamedTuple):
     add_self_edges_to_nodes: bool = True
 
     add_target_goal_to_nodes: bool = True
+    heterogeneous_agents: bool = False
 
     agent_previous_obs_stack_size: int = 1
 
