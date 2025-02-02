@@ -333,10 +333,20 @@ class GraphAttentionActorRNN(nn.Module):
 
         agent_indices = graph.agent_indices
 
-        graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
-        nodes = graph_embedding.nodes
+        if self.config.network_config.use_graph_attention_in_actor:
+            graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
+            nodes = graph_embedding.nodes
+        else:
+            nodes = graph.nodes
+            # Embed entity_type.
+            entity_type = nodes[..., -1].astype(jnp.int32)
+            entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
+                entity_type
+            )
+            nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+            nodes = PathNet()(nodes)
 
-        agent_node_features = graph_embedding.nodes[
+        agent_node_features = nodes[
             jnp.arange(nodes.shape[0])[..., None],
             jnp.arange(nodes.shape[1])[None, ...],
             agent_indices,
@@ -359,43 +369,43 @@ class CriticRNN(nn.Module):
     @nn.compact
     def __call__(self, hidden, x):
         _w_s, graph, dones = x
-        # nodes = graph.nodes
-        #
-        # # Embed entity_type.
-        # entity_type = nodes[..., -1].astype(jnp.int32)
-        # entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
-        #     entity_type
-        # )
-        # nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
-        # world_state = jnp.sum(
-        #     nodes, axis=2
-        # )  # Aggregate all node features for a given actor and time step
 
-        # world_state = PathNet()(world_state)
+        if self.config.network_config.use_graph_attention_in_critic:
+            # this is target mpe specific
+            agent_indices = graph.agent_indices
 
-        # this is target mpe specific
-        agent_indices = graph.agent_indices
+            num_agents = self.config.env_config.env_kwargs.num_agents
+            num_entities = 2 * num_agents
+            senders, receivers = jnp.meshgrid(jnp.arange(num_entities), jnp.arange(num_agents))
+            senders = senders.flatten()
+            receivers = receivers.flatten()
+            senders = jnp.broadcast_to(senders, graph.senders.shape[:-1] + senders.shape)
+            receivers = jnp.broadcast_to(receivers, graph.receivers.shape[:-1] + receivers.shape)
 
-        num_agents = self.config.env_config.env_kwargs.num_agents
-        num_entities = 2 * num_agents
-        senders, receivers = jnp.meshgrid(jnp.arange(num_entities), jnp.arange(num_agents))
-        senders = senders.flatten()
-        receivers = receivers.flatten()
-        senders = jnp.broadcast_to(senders, graph.senders.shape[:-1] + senders.shape)
-        receivers = jnp.broadcast_to(receivers, graph.receivers.shape[:-1] + receivers.shape)
+            edges = jnp.zeros(graph.edges.shape[:-2] + (senders.shape[-1], 1))
 
-        edges = jnp.zeros(graph.edges.shape[:-2] + (senders.shape[-1], 1))
+            graph = graph._replace(senders=senders, receivers=receivers, edges=edges)
 
-        graph = graph._replace(senders=senders, receivers=receivers, edges=edges)
+            graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
+            nodes = graph_embedding.nodes
 
-        graph_embedding = GraphStackedMultiHeadAttention(self.config)(graph)
-        nodes = graph_embedding.nodes
-
-        world_state = nodes[
-            jnp.arange(nodes.shape[0])[..., None],
-            jnp.arange(nodes.shape[1])[None, ...],
-            agent_indices,
-        ]
+            world_state = nodes[
+                jnp.arange(nodes.shape[0])[..., None],
+                jnp.arange(nodes.shape[1])[None, ...],
+                agent_indices,
+            ]
+        else:
+            nodes = graph.nodes
+            # Embed entity_type.
+            entity_type = nodes[..., -1].astype(jnp.int32)
+            entity_emb = nn.Embed(2, self.config.network_config.entity_type_embedding_dim)(
+                entity_type
+            )
+            nodes = jnp.concatenate([nodes[..., :-1], entity_emb], axis=-1)
+            world_state = jnp.sum(
+                nodes, axis=2
+            )  # Aggregate all node features for a given actor and time step
+            world_state = PathNet()(world_state)
 
         embedding = nn.Dense(
             self.config.network_config.fc_dim_size,
