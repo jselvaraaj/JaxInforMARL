@@ -1,10 +1,12 @@
-from config.mappo_config import MAPPOConfig, CommunicationType
+from config.mappo_config import CommunicationType, MAPPOConfig
 
 
 def config_to_dict(config):
-    is_primitive_type = lambda obj: isinstance(
-        obj, (int, float, str, bool, type(None), CommunicationType, list)
-    )
+    def is_primitive_type(obj):
+        return isinstance(
+            obj, (int, float, str, bool, type(None), CommunicationType, list)
+        )
+
     return {
         attr: (
             getattr(config, attr)
@@ -13,7 +15,7 @@ def config_to_dict(config):
         )
         for attr in dir(config)
         if not callable(getattr(config, attr))
-           and not (attr.startswith("__") or attr.startswith("_"))
+        and not (attr.startswith("__") or attr.startswith("_"))
     }
 
 
