@@ -20,14 +20,14 @@ class EnvKwArgs(NamedTuple):
 
     num_agents: int = 3
     max_steps: int = 50
-    collision_reward_coefficient: float = -10
+    collision_reward_coefficient: float = -0.20
     one_time_death_reward: int = 10
-    distance_to_goal_reward_coefficient: int = 1
+    distance_to_goal_reward_coefficient: int = 10
     entity_acceleration: int = 5
 
     agent_max_speed: int = -1
     agent_visibility_radius: list[float] = [
-        0.25,
+        0.5,
     ]
     entities_initial_coord_radius: list[float] = [
         1,
@@ -62,7 +62,7 @@ class PPOConfig(NamedTuple):
     is_clip_eps_per_env: bool = False
     max_grad_norm: float = 10
     num_steps_per_update: int = 128
-    num_minibatches_actors: int = 4
+    num_minibatches_actors: int = 32
     update_epochs: int = 4
 
     gae_lambda: float = 0.95
@@ -81,9 +81,9 @@ class TrainingConfig(NamedTuple):
     num_seeds: int = 2
     lr: float = 5e-4
     anneal_lr: bool = True
-    num_envs: int = 4
+    num_envs: int = 32
     gamma: float = 0.99
-    total_timesteps: float = 1e4
+    total_timesteps: float = 1e6
     ppo_config: PPOConfig = PPOConfig()
 
 
@@ -95,12 +95,12 @@ class NeuralODEConfig(NamedTuple):
 
 
 class NetworkConfig(NamedTuple):
-    use_rnn: bool = False
+    use_rnn: bool = True
     use_graph_attention_in_actor: bool = True
     use_graph_attention_in_critic: bool = False
 
-    fc_dim_size: int = 8
-    gru_hidden_dim: int = 8
+    fc_dim_size: int = 64
+    gru_hidden_dim: int = 64
 
     actor_num_hidden_linear_layer: int = 2
     critic_num_hidden_linear_layer: int = 2
@@ -109,10 +109,10 @@ class NetworkConfig(NamedTuple):
 
     num_graph_attn_layers: int = 2
     num_heads_per_attn_layer: int = 3
-    graph_attention_key_dim: int = 8
+    graph_attention_key_dim: int = 16
 
     graph_num_linear_layer: int = 2
-    graph_hidden_feature_dim: int = 8
+    graph_hidden_feature_dim: int = 16
 
     neural_ODE_config: NeuralODEConfig = NeuralODEConfig()
 
@@ -120,8 +120,8 @@ class NetworkConfig(NamedTuple):
 class WandbConfig(NamedTuple):
     entity: str = "josssdan"
     project: str = "JaxInforMARL"
-    mode: Literal["online", "offline", "disabled"] = "disabled"
-    save_model: bool = False
+    mode: Literal["online", "offline", "disabled"] = "online"
+    save_model: bool = True
     checkpoint_model_every_update_steps: float = 1e2
 
 
@@ -142,12 +142,12 @@ class MAPPOConfig(NamedTuple):
 
     @classmethod
     def create(
-            cls,
-            env_config=EnvConfig(),
-            training_config=TrainingConfig(),
-            network_config=NetworkConfig(),
-            wandb_config=WandbConfig(),
-            testing=False,
+        cls,
+        env_config=EnvConfig(),
+        training_config=TrainingConfig(),
+        network_config=NetworkConfig(),
+        wandb_config=WandbConfig(),
+        testing=False,
     ) -> MAPPOConfig:
         num_actors = env_config.env_kwargs.num_agents * training_config.num_envs
         batch_size = num_actors * training_config.ppo_config.num_steps_per_update
@@ -160,19 +160,19 @@ class MAPPOConfig(NamedTuple):
                 // training_config.ppo_config.num_steps_per_update
             ),
             minibatch_size=(
-                    batch_size // training_config.ppo_config.num_minibatches_actors
+                batch_size // training_config.ppo_config.num_minibatches_actors
             ),
             scaled_clip_eps=(
                 training_config.ppo_config.clip_eps / env_config.env_kwargs.num_agents
                 if training_config.ppo_config.is_clip_eps_per_env
                 else training_config.ppo_config.clip_eps
             ),
-            num_entity_types=num_entity_types
+            num_entity_types=num_entity_types,
         )
         if not testing:
-            assert (
-                    _derived_values.num_updates > 0
-            ), "Number of updates per environment must be greater than 0."
+            assert _derived_values.num_updates > 0, (
+                "Number of updates per environment must be greater than 0."
+            )
 
         return cls(
             env_config=env_config,
